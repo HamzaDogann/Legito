@@ -673,17 +673,7 @@ class _LibraryPageState extends State<LibraryPage> {
                             ),
                           ),
                         ),
-                      if (libraryProvider.errorMessage != null &&
-                          libraryProvider.errorMessage!.isNotEmpty)
-                        Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 16.0),
-                          child: Center(
-                            child: Text(
-                              "Hata: ${libraryProvider.errorMessage}",
-                              style: const TextStyle(color: Colors.red),
-                            ),
-                          ),
-                        ),
+
                       _buildBookListSection(
                         "Şuan Okunanlar",
                         libraryProvider.currentlyReading,

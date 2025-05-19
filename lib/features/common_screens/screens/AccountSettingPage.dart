@@ -1,11 +1,10 @@
 // lib/features/common_screens/screens/AccountSettingPage.dart
-import 'dart:io';
+import 'dart:io'; // File için
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
-import '../../../core/navigation/app_routes.dart'; // AppRoutes importu
-import '../../../state_management/auth_provider.dart'; // AuthProvider importu
-// import '../models/account_setting_args.dart'; // Eğer argüman sınıfı kullanılacaksa
+import '../../../core/navigation/app_routes.dart';
+import '../../../state_management/auth_provider.dart';
 
 class AccountSettingPage extends StatefulWidget {
   const AccountSettingPage({Key? key}) : super(key: key);
@@ -15,54 +14,100 @@ class AccountSettingPage extends StatefulWidget {
 }
 
 class _AccountSettingPageState extends State<AccountSettingPage> {
-  bool _notificationsEnabled = true;
-  File? _pickedImageFile;
+  bool _notificationsEnabled = true; // Bu özellik API'ye bağlanmadı, sadece UI
+  File? _pickedImageFile; // Seçilen yeni resim dosyası
   final ImagePicker _picker = ImagePicker();
+  bool _isUploadingPhoto = false;
 
   @override
   void initState() {
     super.initState();
+    // Oturum kontrolü, eğer kullanıcı login değilse login sayfasına yönlendir
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
       if (!authProvider.isAuthenticated) {
-        Navigator.pushNamedAndRemoveUntil(
-          context,
-          AppRoutes.login,
-          (route) => false,
-        );
+        if (mounted) {
+          Navigator.pushNamedAndRemoveUntil(
+            context,
+            AppRoutes.login,
+            (route) => false,
+          );
+        }
       }
     });
   }
 
-  Future<void> _pickImage() async {
+  Future<void> _pickAndUploadImage() async {
     try {
       final XFile? pickedFile = await _picker.pickImage(
         source: ImageSource.gallery,
-        imageQuality: 70,
-        maxWidth: 800,
+        imageQuality: 70, // Kalite %70
+        maxWidth: 800, // Maksimum genişlik
+        maxHeight: 800, // Maksimum yükseklik
       );
+
       if (pickedFile != null) {
         setState(() {
           _pickedImageFile = File(pickedFile.path);
+          _isUploadingPhoto = true; // Yükleme başladı
         });
-        print('Seçilen resim: ${pickedFile.path}');
-        // TODO: Seçilen resmi backend'e yükle
+
+        final authProvider = Provider.of<AuthProvider>(context, listen: false);
+        authProvider.clearOperationError();
+        bool success = await authProvider.updateUserPhoto(_pickedImageFile!);
+
+        if (mounted) {
+          if (success) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Profil fotoğrafı başarıyla güncellendi!'),
+                backgroundColor: Colors.green,
+              ),
+            );
+            setState(() {
+              _pickedImageFile = null;
+            }); // Başarılı yükleme sonrası seçimi sıfırla
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  'Fotoğraf yükleme hatası: ${authProvider.operationError ?? "Bilinmeyen sorun."}',
+                ),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+          setState(() {
+            _isUploadingPhoto = false;
+          }); // Yükleme bitti
+        }
       }
     } catch (e) {
-      print('Resim seçme hatası: $e');
+      print('Resim seçme/yükleme hatası: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Resim seçilirken bir hata oluştu.')),
+          const SnackBar(
+            content: Text('Resim seçilirken veya yüklenirken bir hata oluştu.'),
+          ),
         );
+        setState(() {
+          _isUploadingPhoto = false;
+        });
       }
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    // AuthProvider'ı dinleyerek displayName, email, profilePhotoUrl değişikliklerinde UI'ı güncelle
     final authProvider = Provider.of<AuthProvider>(context);
 
-    if (!authProvider.isAuthenticated) {
+    if (!authProvider.isAuthenticated && !authProvider.isLoading) {
+      // initState'te yönlendirme yapılıyor, bu bir fallback.
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    if (authProvider.isLoading && authProvider.displayName == null) {
+      // İlk yükleme gibi
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
@@ -70,26 +115,22 @@ class _AccountSettingPageState extends State<AccountSettingPage> {
     if (_pickedImageFile != null) {
       currentProfileImageProvider = FileImage(_pickedImageFile!);
     } else if (authProvider.profilePhotoUrl != null &&
+        authProvider.profilePhotoUrl!.isNotEmpty &&
         authProvider.profilePhotoUrl!.startsWith('http')) {
       currentProfileImageProvider = NetworkImage(authProvider.profilePhotoUrl!);
     } else {
       currentProfileImageProvider = const AssetImage(
         'assets/images/Profilimg.png',
-      );
+      ); // Varsayılan resim
     }
 
     return Scaffold(
       appBar: AppBar(
-        // backgroundColor, foregroundColor, titleTextStyle, iconTheme, elevation
-        // gibi özellikler belirtilmediği için main.dart'taki appBarTheme'den alınacaktır.
         title: const Text('Kullanıcı Ayarları'),
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back), // Renk temadan gelecek
+          icon: const Icon(Icons.arrow_back),
           onPressed: () => Navigator.pop(context),
         ),
-        // titleSpacing: 0, // İsteğe bağlı, başlığı sola yaklaştırır
-        // centerTitle: false, // İsteğe bağlı, başlığı sola yaslar
-        // elevation: 0.5, // main.dart'taki temada zaten 0.5 olarak ayarlıydı.
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
@@ -103,29 +144,46 @@ class _AccountSettingPageState extends State<AccountSettingPage> {
                   radius: 60,
                   backgroundColor: Colors.grey.shade300,
                   backgroundImage: currentProfileImageProvider,
-                  onBackgroundImageError: (exception, stackTrace) {
-                    print("Profil resmi yüklenemedi: $exception");
-                  },
+                  child:
+                      _isUploadingPhoto
+                          ? Container(
+                            // Yükleme sırasında overlay
+                            width: 120,
+                            height: 120,
+                            decoration: BoxDecoration(
+                              color: Colors.black.withOpacity(0.5),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Center(
+                              child: CircularProgressIndicator(
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  Colors.white,
+                                ),
+                              ),
+                            ),
+                          )
+                          : null,
                 ),
-                Positioned(
-                  child: Material(
-                    color: Colors.white,
-                    shape: const CircleBorder(),
-                    elevation: 2.0,
-                    child: InkWell(
-                      onTap: _pickImage,
-                      customBorder: const CircleBorder(),
-                      child: const Padding(
-                        padding: EdgeInsets.all(8.0),
-                        child: Icon(
-                          Icons.edit,
-                          size: 20,
-                          color: Color(0xFFFF8128),
+                if (!_isUploadingPhoto) // Yükleme sırasında butonu gizle
+                  Positioned(
+                    child: Material(
+                      color: Colors.white,
+                      shape: const CircleBorder(),
+                      elevation: 2.0,
+                      child: InkWell(
+                        onTap: _pickAndUploadImage,
+                        customBorder: const CircleBorder(),
+                        child: const Padding(
+                          padding: EdgeInsets.all(8.0),
+                          child: Icon(
+                            Icons.edit,
+                            size: 20,
+                            color: Color(0xFFFF8128),
+                          ),
                         ),
                       ),
                     ),
                   ),
-                ),
               ],
             ),
           ),
@@ -146,17 +204,13 @@ class _AccountSettingPageState extends State<AccountSettingPage> {
           _buildSettingsTile(
             icon: Icons.person_outline,
             title: 'Kullanıcı Bilgilerini Güncelle',
-            onTap: () {
-              Navigator.pushNamed(context, AppRoutes.updateUser);
-            },
+            onTap: () => Navigator.pushNamed(context, AppRoutes.updateUser),
           ),
           const Divider(height: 1),
           _buildSettingsTile(
             icon: Icons.lock_outline,
             title: 'Şifre Değiştir',
-            onTap: () {
-              Navigator.pushNamed(context, AppRoutes.updatePassword);
-            },
+            onTap: () => Navigator.pushNamed(context, AppRoutes.updatePassword),
           ),
           const Divider(height: 1),
           SwitchListTile(
@@ -170,11 +224,8 @@ class _AccountSettingPageState extends State<AccountSettingPage> {
             ),
             value: _notificationsEnabled,
             onChanged: (value) {
-              setState(() {
-                _notificationsEnabled = value;
-              });
-              print('Bildirim ayarı: $value');
-              // TODO: Bildirim ayarını kaydet
+              setState(() => _notificationsEnabled = value);
+              // TODO: Bildirim ayarını kaydet (API veya lokal)
             },
             activeColor: const Color(0xFFFF8128),
             contentPadding: const EdgeInsets.symmetric(
