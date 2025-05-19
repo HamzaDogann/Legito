@@ -1,278 +1,216 @@
+// lib/features/mentor_features/tips_mentor/screens/TipsPage.dart
 import 'package:flutter/material.dart';
-import 'package:legitoproject/shared_widgets/cover_card_widget.dart';
-// import 'dart:io'; // Bu örnekte kullanılmıyor
-// CoverCardWidget importu
+import 'package:provider/provider.dart';
+import '../../../../shared_widgets/cover_card_widget.dart';
+import '../../../../core/navigation/app_routes.dart';
+import '../../../../state_management/auth_provider.dart';
+import '../state_management/tip_provider.dart';
+import '../models/tip_response_dto.dart';
+import '../models/tip_enums.dart';
 
-// --- YENİ ORTAK SABİTLER ---
-const double kUnifiedListItemCoverSize = 80.0;
-const BorderRadius kUnifiedListItemBorderRadius = BorderRadius.all(
-  Radius.circular(12.0),
-);
-// --- ---
-
-// İpucu öğesini temsil edecek model
-class TipItem {
+class TipItemUI {
   String id;
   String title;
   String content;
-  String animalIconPath; // Seçilen hayvan ikonunun asset yolu
-  Gradient gradient; // Kartın arka plan gradient'i
-
-  TipItem({
+  String animalIconPath;
+  Gradient gradient;
+  int apiAvatarIndex;
+  TipItemUI({
     required this.id,
     required this.title,
     required this.content,
     required this.animalIconPath,
     required this.gradient,
+    required this.apiAvatarIndex,
   });
 }
 
 class TipsPage extends StatefulWidget {
-  const TipsPage({super.key});
-
+  const TipsPage({Key? key}) : super(key: key);
   @override
   State<TipsPage> createState() => _TipsPageState();
 }
 
 class _TipsPageState extends State<TipsPage> {
-  // Renkler ve Sabitler
   static const Color appBarBackground = Color(0xFFF4F6F9);
   static const Color textDark = Color.fromARGB(255, 36, 36, 36);
-  static const Color searchButtonColor = Color(0xFFFF8128); // Turuncu
+  static const Color searchButtonColor = Color(0xFFFF8128);
   static const Color searchInputHintColor = Color(0xFF9CA3AF);
-  static const Color fabColor = Color(0xFFFF8128); // + butonu için turuncu
+  static const Color fabColor = Color(0xFFFF8128);
   static const Color itemTitleColor = Color.fromARGB(255, 36, 36, 36);
-  static const Color itemContentColor = Color.fromARGB(
-    255,
-    80,
-    80,
-    80,
-  ); // İçerik rengi biraz daha açık
+  static const Color itemContentColor = Color.fromARGB(255, 80, 80, 80);
   static const Color inputFillColor = Color(0xFFF3F4F6);
   static const Color saveButtonColor = Color(0xFFFF8128);
   static const Color cancelButtonColor = Color.fromARGB(255, 36, 36, 36);
   static const Color animalIconCircleBg = Color(0xFFE5E7EB);
   static const Color activeAnimalIconCircleBg = Color(0xFF374151);
-
-  // Örnek Gradientler (Kartlar için)
-  static const Gradient gradientRed = LinearGradient(
-    colors: [Color(0xFFFA8072), Color(0xFFEF4444)],
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
+  static const double kUnifiedListItemCoverSize = 80.0;
+  static const BorderRadius kUnifiedListItemBorderRadius = BorderRadius.all(
+    Radius.circular(12.0),
   );
-  static const Gradient gradientPurple = LinearGradient(
-    colors: [Color(0xFF8B5CF6), Color(0xFF7C3AED)],
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
-  );
-  static const Gradient gradientGreen = LinearGradient(
-    colors: [Color(0xFF34D399), Color(0xFF10B981)],
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
-  );
-  static const Gradient gradientDarkGrey = LinearGradient(
-    colors: [Color(0xFF4B5563), Color(0xFF374151)],
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
-  );
-  final List<Gradient> _availableCardGradients = [
-    gradientRed,
-    gradientPurple,
-    gradientGreen,
-    gradientDarkGrey,
+  final List<Gradient> _availableCardGradients = const [
+    LinearGradient(
+      colors: [Color(0xFFFA8072), Color(0xFFEF4444)],
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+    ),
+    LinearGradient(
+      colors: [Color(0xFF8B5CF6), Color(0xFF7C3AED)],
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+    ),
+    LinearGradient(
+      colors: [Color(0xFF34D399), Color(0xFF10B981)],
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+    ),
+    LinearGradient(
+      colors: [Color(0xFF4B5563), Color(0xFF374151)],
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+    ),
   ];
-
-  final List<String> _animalIconPaths = [
-    'assets/images/bunny.png',
+  final List<String> _animalIconPaths = const [
     'assets/images/cow.png',
-    'assets/images/dog_tip.png',
     'assets/images/tiger.png',
+    'assets/images/dog_tip.png',
     'assets/images/bird.png',
+    'assets/images/bunny.png',
   ];
 
-  // ESKİ SABİTLER KALDIRILDI veya YORUMA ALINDI
-  // static const double kTipCoverCardSize = 72.0;
-  // static const BorderRadius kTipCoverCardBorderRadius =
-  //     BorderRadius.all(Radius.circular(12.0));
-
-  List<TipItem> _tips = [];
-  List<TipItem> _filteredTips = [];
   String _searchTerm = '';
-  TipItem? _selectedTip;
+  TipItemUI? _selectedTipUI;
   bool _isSelectionMode = false;
-
   final TextEditingController _searchController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _contentController = TextEditingController();
-  int _selectedAnimalIconIndex = 2;
+  int _selectedAnimalIconIndexInModal = 2;
   PageController? _animalPageController;
 
   @override
   void initState() {
     super.initState();
-    _loadInitialTips();
-    _filteredTips = List.from(_tips);
-    _searchController.addListener(() {
-      setState(() {
-        _searchTerm = _searchController.text;
-        _filterTips();
-      });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      if (!authProvider.isAuthenticated || !authProvider.isMentor()) {
+        if (mounted)
+          Navigator.pushNamedAndRemoveUntil(
+            context,
+            AppRoutes.login,
+            (route) => false,
+          );
+      } else {
+        Provider.of<TipProvider>(context, listen: false).fetchUserTips();
+      }
     });
-    _animalPageController = PageController(
-      initialPage: _selectedAnimalIconIndex,
-      viewportFraction: 0.25,
-    );
+    _searchController.addListener(() {
+      if (mounted)
+        setState(() {
+          _searchTerm = _searchController.text;
+        });
+    });
   }
 
-  Gradient _getRandomCardGradient() {
-    return _availableCardGradients[DateTime.now().millisecondsSinceEpoch %
+  String _getAnimalIconPathFromApiIndex(int apiIndex) {
+    if (apiIndex >= 0 && apiIndex < _animalIconPaths.length)
+      return _animalIconPaths[apiIndex];
+    return _animalIconPaths[2];
+  }
+
+  Gradient _getRandomCardGradient(String idBasedSeed) {
+    return _availableCardGradients[idBasedSeed.hashCode %
         _availableCardGradients.length];
   }
 
-  void _loadInitialTips() {
-    _tips = [
-      TipItem(
-        id: 't1',
-        title: "Biliyor muydun?",
-        content: "Lorem Ipsum Dore Ferhano...",
-        animalIconPath: _animalIconPaths[2],
-        gradient: gradientRed,
-      ),
-      TipItem(
-        id: 't2',
-        title: "Önemli Bir Not",
-        content:
-            "Okuma hızını artırmak için çeşitli teknikler bulunmaktadır. Bunlardan biri de göz kaslarını eğitmektir.",
-        animalIconPath: _animalIconPaths[1],
-        gradient: gradientPurple,
-      ),
-      TipItem(
-        id: 't3',
-        title: "Günün Tavsiyesi",
-        content:
-            "Her gün en az 15 dakika odaklanarak kitap okumak, anlama yeteneğinizi geliştirir.",
-        animalIconPath: _animalIconPaths[3],
-        gradient: gradientGreen,
-      ),
-      TipItem(
-        id: 't4',
-        title: "Unutma!",
-        content:
-            "Anlamadığın yerleri tekrar etmekten çekinme, bu öğrenmenin bir parçasıdır.",
-        animalIconPath: _animalIconPaths[0],
-        gradient: gradientDarkGrey,
-      ),
-    ];
-  }
-
-  void _filterTips() {
-    if (_searchTerm.isEmpty) {
-      _filteredTips = List.from(_tips);
-    } else {
-      _filteredTips =
-          _tips
-              .where(
-                (tip) =>
-                    tip.title.toLowerCase().contains(
-                      _searchTerm.toLowerCase(),
-                    ) ||
-                    tip.content.toLowerCase().contains(
-                      _searchTerm.toLowerCase(),
-                    ),
-              )
-              .toList();
-    }
-  }
-
-  void _onTipLongPress(TipItem tip) {
-    setState(() {
-      _selectedTip = tip;
-      _isSelectionMode = true;
-    });
-  }
-
-  void _exitSelectionMode() {
-    setState(() {
-      _selectedTip = null;
-      _isSelectionMode = false;
-    });
-  }
+  void _onTipLongPress(TipItemUI tip) => setState(() {
+    _selectedTipUI = tip;
+    _isSelectionMode = true;
+  });
+  void _exitSelectionMode() => setState(() {
+    _selectedTipUI = null;
+    _isSelectionMode = false;
+  });
 
   void _deleteSelectedTip() {
-    if (_selectedTip != null) {
-      showDialog(
-        context: context,
-        builder:
-            (BuildContext context) => AlertDialog(
-              title: Text("İpucunu Sil"),
-              content: Text(
-                "'${_selectedTip!.title}' başlıklı ipucu silinecek. Emin misiniz?",
+    if (_selectedTipUI == null) return;
+    showDialog(
+      context: context,
+      builder:
+          (BuildContext dCtx) => AlertDialog(
+            title: const Text("İpucunu Sil"),
+            content: Text("'${_selectedTipUI!.title}' silinecek?"),
+            actions: [
+              TextButton(
+                child: const Text("İptal"),
+                onPressed: () => Navigator.of(dCtx).pop(),
               ),
-              actions: <Widget>[
-                TextButton(
-                  child: Text("İptal"),
-                  onPressed: () => Navigator.of(context).pop(),
-                ),
-                TextButton(
-                  child: Text("Sil", style: TextStyle(color: Colors.red)),
-                  onPressed: () {
-                    Navigator.of(context).pop();
-                    setState(() {
-                      _tips.removeWhere((t) => t.id == _selectedTip!.id);
-                      _filterTips();
+              TextButton(
+                child: const Text("Sil", style: TextStyle(color: Colors.red)),
+                onPressed: () async {
+                  Navigator.of(dCtx).pop();
+                  final tp = Provider.of<TipProvider>(context, listen: false);
+                  final success = await tp.deleteTip(_selectedTipUI!.id);
+                  if (mounted) {
+                    if (success) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text("İpucu silindi.")),
+                      );
                       _exitSelectionMode();
-                    });
-                    ScaffoldMessenger.of(
-                      context,
-                    ).showSnackBar(SnackBar(content: Text("İpucu silindi.")));
-                  },
-                ),
-              ],
-            ),
-      );
-    }
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            "Hata: ${tp.errorMessage ?? 'Bilinmeyen bir sorun.'}",
+                          ),
+                        ),
+                      );
+                    }
+                  }
+                },
+              ),
+            ],
+          ),
+    );
   }
 
-  void _openAddEditTipModal({TipItem? tipToEdit}) {
+  void _openAddEditTipModal({TipItemUI? tipToEdit}) {
     bool isEditing = tipToEdit != null;
     if (isEditing) {
-      _titleController.text = tipToEdit.title;
+      _titleController.text = tipToEdit!.title;
       _contentController.text = tipToEdit.content;
-      _selectedAnimalIconIndex = _animalIconPaths.indexOf(
-        tipToEdit.animalIconPath,
-      );
-      if (_selectedAnimalIconIndex == -1) _selectedAnimalIconIndex = 2;
+      _selectedAnimalIconIndexInModal = tipToEdit.apiAvatarIndex;
     } else {
       _titleController.clear();
       _contentController.clear();
-      _selectedAnimalIconIndex = 2;
+      _selectedAnimalIconIndexInModal = 2;
     }
-    if (_animalPageController?.hasClients ?? false) {
-      Future.delayed(Duration(milliseconds: 50), () {
-        if (_animalPageController?.hasClients ?? false) {
-          _animalPageController?.animateToPage(
-            _selectedAnimalIconIndex,
-            duration: Duration(milliseconds: 300),
-            curve: Curves.easeInOut,
-          );
-        }
-      });
-    }
-
+    _animalPageController = PageController(
+      initialPage: _selectedAnimalIconIndexInModal,
+      viewportFraction: 0.25,
+    );
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.white,
-      shape: RoundedRectangleBorder(
+      shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20.0)),
       ),
-      builder: (BuildContext modalContext) {
+      builder: (BuildContext mCtx) {
         return StatefulBuilder(
-          builder: (BuildContext context, StateSetter modalSetState) {
+          builder: (BuildContext ssbCtx, StateSetter mSetState) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (_animalPageController!.hasClients &&
+                  _animalPageController!.page?.round() !=
+                      _selectedAnimalIconIndexInModal) {
+                _animalPageController!.jumpToPage(
+                  _selectedAnimalIconIndexInModal,
+                );
+              }
+            });
             return Padding(
               padding: EdgeInsets.only(
-                bottom: MediaQuery.of(modalContext).viewInsets.bottom,
+                bottom: MediaQuery.of(mCtx).viewInsets.bottom,
                 left: 20,
                 right: 20,
                 top: 20,
@@ -294,24 +232,22 @@ class _TipsPageState extends State<TipsPage> {
                           ),
                         ),
                       ),
-                      SizedBox(height: 25),
+                      const SizedBox(height: 25),
                       SizedBox(
                         height: 100,
                         child: PageView.builder(
                           controller: _animalPageController,
                           itemCount: _animalIconPaths.length,
-                          onPageChanged: (index) {
-                            modalSetState(() {
-                              _selectedAnimalIconIndex = index;
-                            });
-                          },
-                          itemBuilder: (context, index) {
-                            bool isActive = index == _selectedAnimalIconIndex;
-                            double scale = isActive ? 1.2 : 0.8;
-                            double iconSize = isActive ? 60 : 45;
+                          onPageChanged:
+                              (index) => mSetState(
+                                () => _selectedAnimalIconIndexInModal = index,
+                              ),
+                          itemBuilder: (pctx, index) {
+                            bool isActive =
+                                index == _selectedAnimalIconIndexInModal;
                             return AnimatedScale(
-                              scale: scale,
-                              duration: Duration(milliseconds: 200),
+                              scale: isActive ? 1.2 : 0.8,
+                              duration: const Duration(milliseconds: 200),
                               child: Center(
                                 child: CircleAvatar(
                                   radius: isActive ? 35 : 28,
@@ -323,8 +259,8 @@ class _TipsPageState extends State<TipsPage> {
                                     padding: EdgeInsets.all(isActive ? 6 : 4),
                                     child: Image.asset(
                                       _animalIconPaths[index],
-                                      width: iconSize,
-                                      height: iconSize,
+                                      width: isActive ? 60 : 45,
+                                      height: isActive ? 60 : 45,
                                     ),
                                   ),
                                 ),
@@ -333,7 +269,7 @@ class _TipsPageState extends State<TipsPage> {
                           },
                         ),
                       ),
-                      SizedBox(height: 25),
+                      const SizedBox(height: 25),
                       _buildFormTextField(
                         "Başlık",
                         _titleController,
@@ -345,20 +281,22 @@ class _TipsPageState extends State<TipsPage> {
                         isRequired: true,
                         maxLines: 4,
                       ),
-                      SizedBox(height: 25),
+                      const SizedBox(height: 25),
                       Row(
                         children: [
                           Expanded(
                             child: ElevatedButton(
-                              onPressed: () => Navigator.pop(modalContext),
+                              onPressed: () => Navigator.pop(mCtx),
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: cancelButtonColor,
-                                padding: EdgeInsets.symmetric(vertical: 14),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 14,
+                                ),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(10),
                                 ),
                               ),
-                              child: Text(
+                              child: const Text(
                                 'Vazgeç',
                                 style: TextStyle(
                                   color: Colors.white,
@@ -367,25 +305,76 @@ class _TipsPageState extends State<TipsPage> {
                               ),
                             ),
                           ),
-                          SizedBox(width: 10),
+                          const SizedBox(width: 10),
                           Expanded(
                             child: ElevatedButton(
-                              onPressed: () {
+                              onPressed: () async {
                                 if (_formKey.currentState!.validate()) {
-                                  _saveOrUpdateTip(tipToEdit);
-                                  Navigator.pop(modalContext);
+                                  final tp = Provider.of<TipProvider>(
+                                    context,
+                                    listen: false,
+                                  );
+                                  bool success;
+                                  if (isEditing && tipToEdit != null) {
+                                    success = await tp.updateTip(
+                                      tipId: tipToEdit.id,
+                                      title: _titleController.text.trim(),
+                                      content: _contentController.text.trim(),
+                                      apiAvatarIndex:
+                                          _selectedAnimalIconIndexInModal,
+                                    );
+                                  } else {
+                                    success = await tp.createTip(
+                                      title: _titleController.text.trim(),
+                                      content: _contentController.text.trim(),
+                                      apiAvatarIndex:
+                                          _selectedAnimalIconIndexInModal,
+                                    );
+                                  }
+                                  Navigator.pop(mCtx);
+                                  if (mounted) {
+                                    if (success) {
+                                      ScaffoldMessenger.of(
+                                        context,
+                                      ).showSnackBar(
+                                        SnackBar(
+                                          content: Text(
+                                            isEditing
+                                                ? "İpucu güncellendi."
+                                                : "İpucu oluşturuldu.",
+                                          ),
+                                        ),
+                                      );
+                                      if (_isSelectionMode)
+                                        _exitSelectionMode();
+                                    } else {
+                                      ScaffoldMessenger.of(
+                                        context,
+                                      ).showSnackBar(
+                                        SnackBar(
+                                          content: Text(
+                                            isEditing
+                                                ? "Güncelleme hatası: ${tp.errorMessage ?? 'Bilinmeyen sorun.'}"
+                                                : "Oluşturma hatası: ${tp.errorMessage ?? 'Bilinmeyen sorun.'}",
+                                          ),
+                                        ),
+                                      );
+                                    }
+                                  }
                                 }
                               },
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: saveButtonColor,
-                                padding: EdgeInsets.symmetric(vertical: 14),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 14,
+                                ),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(10),
                                 ),
                               ),
                               child: Text(
-                                isEditing ? 'Güncelle' : 'İpucu Oluştur',
-                                style: TextStyle(
+                                isEditing ? 'Güncelle' : 'Oluştur',
+                                style: const TextStyle(
                                   color: Colors.white,
                                   fontSize: 16,
                                   fontWeight: FontWeight.bold,
@@ -395,7 +384,7 @@ class _TipsPageState extends State<TipsPage> {
                           ),
                         ],
                       ),
-                      SizedBox(height: 20),
+                      const SizedBox(height: 20),
                     ],
                   ),
                 ),
@@ -420,16 +409,16 @@ class _TipsPageState extends State<TipsPage> {
         children: [
           Text(
             label,
-            style: TextStyle(
+            style: const TextStyle(
               color: textDark,
               fontWeight: FontWeight.w600,
               fontSize: 15,
             ),
           ),
-          SizedBox(height: 6),
+          const SizedBox(height: 6),
           TextFormField(
             controller: controller,
-            style: TextStyle(color: textDark),
+            style: const TextStyle(color: textDark),
             maxLines: maxLines,
             decoration: InputDecoration(
               filled: true,
@@ -449,7 +438,7 @@ class _TipsPageState extends State<TipsPage> {
                   width: 1.5,
                 ),
               ),
-              contentPadding: EdgeInsets.symmetric(
+              contentPadding: const EdgeInsets.symmetric(
                 horizontal: 12,
                 vertical: 14,
               ),
@@ -468,35 +457,6 @@ class _TipsPageState extends State<TipsPage> {
     );
   }
 
-  void _saveOrUpdateTip(TipItem? existingTip) {
-    setState(() {
-      final selectedAnimalIcon = _animalIconPaths[_selectedAnimalIconIndex];
-      if (existingTip != null) {
-        existingTip.title = _titleController.text.trim();
-        existingTip.content = _contentController.text.trim();
-        existingTip.animalIconPath = selectedAnimalIcon;
-      } else {
-        final newTip = TipItem(
-          id: DateTime.now().millisecondsSinceEpoch.toString(),
-          title: _titleController.text.trim(),
-          content: _contentController.text.trim(),
-          animalIconPath: selectedAnimalIcon,
-          gradient: _getRandomCardGradient(),
-        );
-        _tips.add(newTip);
-      }
-      _filterTips();
-      if (_isSelectionMode) _exitSelectionMode();
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          existingTip != null ? "İpucu güncellendi." : "İpucu oluşturuldu.",
-        ),
-      ),
-    );
-  }
-
   @override
   void dispose() {
     _searchController.dispose();
@@ -508,107 +468,311 @@ class _TipsPageState extends State<TipsPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar:
-          _isSelectionMode && _selectedTip != null
-              ? AppBar(
-                backgroundColor: appBarBackground,
-                elevation: 0,
-                leading: IconButton(
-                  icon: Icon(Icons.close, color: textDark),
-                  onPressed: _exitSelectionMode,
-                ),
-                title: Text(
-                  _selectedTip!.title,
-                  style: TextStyle(
-                    color: textDark,
-                    fontWeight: FontWeight.w500,
-                    fontSize: 18,
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    if (!authProvider.isAuthenticated || !authProvider.isMentor()) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted)
+          Navigator.pushNamedAndRemoveUntil(
+            context,
+            AppRoutes.login,
+            (route) => false,
+          );
+      });
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+
+    return Consumer<TipProvider>(
+      builder: (context, tipProvider, child) {
+        final List<TipItemUI> allUiTips =
+            tipProvider.mentorTips
+                .map(
+                  (dto) => TipItemUI(
+                    id: dto.id,
+                    title: dto.title,
+                    content: dto.content,
+                    animalIconPath: _getAnimalIconPathFromApiIndex(dto.avatar),
+                    gradient: _getRandomCardGradient(dto.id),
+                    apiAvatarIndex: dto.avatar,
                   ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-                actions: [
-                  IconButton(
-                    icon: Icon(
-                      Icons.delete_outline,
-                      color: Colors.red[400],
-                      size: 28,
-                    ),
-                    onPressed: _deleteSelectedTip,
-                    tooltip: 'Sil',
-                  ),
-                  IconButton(
-                    icon: Icon(Icons.edit_outlined, color: textDark, size: 26),
-                    onPressed: () {
-                      if (_selectedTip != null) {
-                        _openAddEditTipModal(tipToEdit: _selectedTip);
-                      }
-                    },
-                    tooltip: 'Düzenle',
-                  ),
-                  SizedBox(width: 10),
-                ],
-              )
-              : AppBar(
-                backgroundColor: appBarBackground,
-                elevation: 0,
-                leading: IconButton(
-                  icon: Icon(Icons.arrow_back, color: textDark),
-                  onPressed: () => Navigator.of(context).pop(),
-                ),
-                title: Text(
-                  'İpuçları',
-                  style: TextStyle(
-                    color: textDark,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 20,
-                  ),
-                ),
-                centerTitle: false,
-                titleSpacing: 0,
-              ),
-      body: Column(
-        children: [
-          _buildSearchBar(),
-          Expanded(
-            child:
-                _filteredTips.isEmpty && _searchTerm.isNotEmpty
-                    ? Center(
-                      child: Text(
-                        "Arama sonucu bulunamadı.",
-                        style: TextStyle(
-                          fontSize: 16,
-                          color: Colors.grey.shade600,
+                )
+                .toList();
+
+        List<TipItemUI> filteredTipsUI;
+        if (_searchTerm.isEmpty) {
+          filteredTipsUI = allUiTips;
+        } else {
+          filteredTipsUI =
+              allUiTips
+                  .where(
+                    (tip) =>
+                        tip.title.toLowerCase().contains(
+                          _searchTerm.toLowerCase(),
+                        ) ||
+                        tip.content.toLowerCase().contains(
+                          _searchTerm.toLowerCase(),
                         ),
+                  )
+                  .toList();
+        }
+
+        Widget bodyContent;
+
+        if (tipProvider.isLoading && allUiTips.isEmpty) {
+          bodyContent = const Center(
+            child: CircularProgressIndicator(color: Colors.orange),
+          );
+        } else if (!tipProvider.isLoading &&
+            tipProvider.mentorTips.isEmpty &&
+            (tipProvider.errorMessage == null ||
+                tipProvider.errorMessage!.isEmpty)) {
+          bodyContent = Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.lightbulb_outline,
+                  size: 60,
+                  color: Colors.grey.shade400,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  "Henüz hiç ipucu eklenmemiş.",
+                  style: TextStyle(fontSize: 17, color: Colors.grey.shade700),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  "Yeni bir ipucu oluşturarak başlayın!",
+                  style: TextStyle(fontSize: 15, color: Colors.grey.shade600),
+                ),
+                const SizedBox(height: 20),
+                ElevatedButton.icon(
+                  onPressed: () => _openAddEditTipModal(),
+                  icon: const Icon(Icons.add, size: 20),
+                  label: const Text("İlk İpucunu Ekle"),
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 12,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        } else if (!tipProvider.isLoading &&
+            tipProvider.errorMessage != null &&
+            tipProvider.errorMessage!.isNotEmpty) {
+          bodyContent = Center(
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.error_outline,
+                    color: Colors.red.shade300,
+                    size: 50,
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    "Bir Hata Oluştu",
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.red.shade700,
+                    ),
+                  ),
+                  const SizedBox(height: 5),
+                  Text(
+                    tipProvider.errorMessage!,
+                    style: TextStyle(color: Colors.red.shade600, fontSize: 15),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 15),
+                  ElevatedButton(
+                    onPressed: () {
+                      tipProvider.clearErrorMessage();
+                      tipProvider.fetchUserTips();
+                    },
+                    child: const Text("Tekrar Dene"),
+                  ),
+                ],
+              ),
+            ),
+          );
+        } else if (filteredTipsUI.isEmpty && _searchTerm.isNotEmpty) {
+          bodyContent = const Center(
+            child: Text(
+              "Arama sonucu bulunamadı.",
+              style: TextStyle(fontSize: 16, color: Colors.grey),
+            ),
+          );
+        } else if (filteredTipsUI.isNotEmpty) {
+          bodyContent = RefreshIndicator(
+            onRefresh: () async {
+              await tipProvider.fetchUserTips();
+            },
+            color: Colors.orange,
+            child: ListView.separated(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 20.0,
+                vertical: 16.0,
+              ),
+              itemCount: filteredTipsUI.length,
+              itemBuilder: (context, index) {
+                final tip = filteredTipsUI[index];
+                return _buildTipListItem(tip, tipProvider.isLoading);
+              },
+              separatorBuilder:
+                  (context, index) => Divider(
+                    height: 20,
+                    thickness: 0.5,
+                    color: Colors.grey.shade300,
+                  ),
+            ),
+          );
+        } else {
+          bodyContent = Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.lightbulb_outline,
+                  size: 60,
+                  color: Colors.grey.shade400,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  "Henüz hiç ipucu mevcut değil.",
+                  style: TextStyle(fontSize: 17, color: Colors.grey.shade700),
+                ),
+                const SizedBox(height: 10),
+                ElevatedButton.icon(
+                  onPressed: () => _openAddEditTipModal(),
+                  icon: const Icon(Icons.add, size: 20),
+                  label: const Text("İpucu Ekle"),
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 12,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        return Scaffold(
+          backgroundColor: Colors.white,
+          appBar:
+              _isSelectionMode && _selectedTipUI != null
+                  ? AppBar(
+                    backgroundColor: appBarBackground,
+                    elevation: 0,
+                    leading: IconButton(
+                      icon: const Icon(Icons.close, color: textDark),
+                      onPressed: _exitSelectionMode,
+                    ),
+                    title: Text(
+                      _selectedTipUI!.title,
+                      style: const TextStyle(
+                        color: textDark,
+                        fontWeight: FontWeight.w500,
+                        fontSize: 18,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    actions: [
+                      IconButton(
+                        icon: Icon(
+                          Icons.delete_outline,
+                          color: Colors.red[400],
+                          size: 28,
+                        ),
+                        onPressed:
+                            tipProvider.isLoading ? null : _deleteSelectedTip,
+                        tooltip: 'Sil',
+                      ),
+                      IconButton(
+                        icon: const Icon(
+                          Icons.edit_outlined,
+                          color: textDark,
+                          size: 26,
+                        ),
+                        onPressed:
+                            tipProvider.isLoading
+                                ? null
+                                : () {
+                                  if (_selectedTipUI != null)
+                                    _openAddEditTipModal(
+                                      tipToEdit: _selectedTipUI,
+                                    );
+                                },
+                        tooltip: 'Düzenle',
+                      ),
+                      const SizedBox(width: 10),
+                    ],
+                  )
+                  : AppBar(
+                    backgroundColor: appBarBackground,
+                    elevation: 0,
+                    leading: IconButton(
+                      icon: const Icon(Icons.arrow_back, color: textDark),
+                      onPressed: () => Navigator.of(context).pop(),
+                    ),
+                    title: const Text(
+                      'İpuçları Yönetimi',
+                      style: TextStyle(
+                        color: textDark,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 20,
+                      ),
+                    ),
+                    centerTitle: false,
+                    titleSpacing: 0,
+                  ),
+          body: Column(
+            children: [
+              _buildSearchBar(),
+              if (tipProvider.isLoading && allUiTips.isNotEmpty)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8.0),
+                  child: Center(
+                    child: SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.orange,
+                      ),
+                    ),
+                  ),
+                ),
+              Expanded(child: bodyContent),
+            ],
+          ),
+          floatingActionButton: FloatingActionButton(
+            onPressed:
+                tipProvider.isLoading ? null : () => _openAddEditTipModal(),
+            backgroundColor: fabColor,
+            child:
+                (tipProvider.isLoading && allUiTips.isEmpty)
+                    ? const SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: CircularProgressIndicator(
+                        color: Colors.white,
+                        strokeWidth: 3,
                       ),
                     )
-                    : ListView.separated(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 20.0,
-                        vertical: 16.0,
-                      ),
-                      itemCount: _filteredTips.length,
-                      itemBuilder: (context, index) {
-                        final tip = _filteredTips[index];
-                        return _buildTipListItem(tip);
-                      },
-                      separatorBuilder:
-                          (context, index) => Divider(
-                            height: 20,
-                            thickness: 0.5,
-                            color: Colors.grey.shade300,
-                          ),
-                    ),
+                    : const Icon(Icons.add, color: Colors.white, size: 32),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
           ),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _openAddEditTipModal(),
-        backgroundColor: fabColor,
-        child: Icon(Icons.add, color: Colors.white, size: 32),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      ),
+        );
+      },
     );
   }
 
@@ -627,25 +791,27 @@ class _TipsPageState extends State<TipsPage> {
               controller: _searchController,
               decoration: InputDecoration(
                 hintText: 'İpucu Ara...',
-                hintStyle: TextStyle(color: searchInputHintColor, fontSize: 16),
+                hintStyle: const TextStyle(
+                  color: searchInputHintColor,
+                  fontSize: 16,
+                ),
                 border: UnderlineInputBorder(
                   borderSide: BorderSide(color: Colors.grey.shade300),
                 ),
                 enabledBorder: UnderlineInputBorder(
                   borderSide: BorderSide(color: Colors.grey.shade300),
                 ),
-                focusedBorder: UnderlineInputBorder(
+                focusedBorder: const UnderlineInputBorder(
                   borderSide: BorderSide(color: searchButtonColor, width: 1.5),
                 ),
-                contentPadding: EdgeInsets.symmetric(vertical: 10),
+                contentPadding: const EdgeInsets.symmetric(vertical: 10),
               ),
-              style: TextStyle(color: textDark, fontSize: 16),
+              style: const TextStyle(color: textDark, fontSize: 16),
             ),
           ),
-          SizedBox(width: 12),
+          const SizedBox(width: 12),
           InkWell(
             onTap: () {
-              _filterTips();
               FocusScope.of(context).unfocus();
             },
             borderRadius: BorderRadius.circular(28),
@@ -659,11 +825,11 @@ class _TipsPageState extends State<TipsPage> {
                   BoxShadow(
                     color: Colors.black.withOpacity(0.15),
                     blurRadius: 4,
-                    offset: Offset(0, 2),
+                    offset: const Offset(0, 2),
                   ),
                 ],
               ),
-              child: Center(
+              child: const Center(
                 child: Icon(Icons.search, color: Colors.white, size: 28),
               ),
             ),
@@ -673,31 +839,28 @@ class _TipsPageState extends State<TipsPage> {
     );
   }
 
-  Widget _buildTipListItem(TipItem tip) {
+  Widget _buildTipListItem(TipItemUI tip, bool isLoading) {
     return InkWell(
-      onTap: () {
-        _onTipLongPress(tip);
-      },
-      onLongPress: () => _onTipLongPress(tip),
+      onTap: isLoading ? null : () => _onTipLongPress(tip),
+      onLongPress: isLoading ? null : () => _onTipLongPress(tip),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 12.0),
         child: Row(
           children: [
             CoverCardWidget(
-              size: kUnifiedListItemCoverSize, // <<< DEĞİŞTİ
-              borderRadius: kUnifiedListItemBorderRadius, // <<< DEĞİŞTİ
+              size: kUnifiedListItemCoverSize,
+              borderRadius: kUnifiedListItemBorderRadius,
               gradient: tip.gradient,
               imageAssetPath: tip.animalIconPath,
-              // iconOrImageSize: kUnifiedListItemCoverSize * 0.8, // İsteğe bağlı
             ),
-            SizedBox(width: 20),
+            const SizedBox(width: 20),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     tip.title,
-                    style: TextStyle(
+                    style: const TextStyle(
                       color: itemTitleColor,
                       fontSize: 18,
                       fontWeight: FontWeight.w600,
@@ -705,10 +868,13 @@ class _TipsPageState extends State<TipsPage> {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  SizedBox(height: 5),
+                  const SizedBox(height: 5),
                   Text(
                     tip.content,
-                    style: TextStyle(fontSize: 15, color: itemContentColor),
+                    style: const TextStyle(
+                      fontSize: 15,
+                      color: itemContentColor,
+                    ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),

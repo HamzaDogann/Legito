@@ -45,7 +45,10 @@ class TipProvider with ChangeNotifier {
     _errorMessage = null;
     // notifyListeners(); // Public home'da bu provider dinlenmiyorsa gereksiz olabilir
 
-    _randomTipForPublicHome = await _tipService.getRandomTip();
+    final String? currentAccessToken = _authProvider.token; // Token'ı al
+    _randomTipForPublicHome = await _tipService.getRandomTip(
+      accessToken: currentAccessToken,
+    );
 
     _isLoading = false;
     if (_randomTipForPublicHome == null) {

@@ -1,18 +1,17 @@
 // lib/main.dart
-import 'package:flutter/foundation.dart'; // kDebugMode için
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'dart:io'; // HttpOverrides için
+import 'dart:io';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'core/navigation/app_routes.dart';
 import 'core/navigation/route_generator.dart';
 import 'state_management/auth_provider.dart';
-// LibraryProvider için import
 import 'features/user_features/library/state_management/library_provider.dart';
+// YENİ IMPORT (TipProvider)
+import 'features/mentor_features/tips_mentor/state_management/tip_provider.dart';
 
-// SADECE GELİŞTİRME AŞAMASINDA KULLANILMALIDIR!
-// Lokal HTTPS sertifikalarına (localhost gibi) güvenmek için.
 class MyHttpOverrides extends HttpOverrides {
   @override
   HttpClient createHttpClient(SecurityContext? context) {
@@ -23,11 +22,7 @@ class MyHttpOverrides extends HttpOverrides {
 }
 
 void main() {
-  // SADECE GELİŞTİRME AŞAMASINDA!
-  // Production'a geçerken bu satır kaldırılmalı veya uygun sertifika yönetimi yapılmalı.
-  // Bu, Flutter'ın localhost gibi kendinden imzalı SSL sertifikalarına güvenmesini sağlar.
   if (kDebugMode) {
-    // Sadece debug modunda çalışsın
     HttpOverrides.global = MyHttpOverrides();
   }
 
@@ -35,37 +30,28 @@ void main() {
     MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => AuthProvider()),
-        // AuthProvider'a bağımlı LibraryProvider'ı ekliyoruz
         ChangeNotifierProxyProvider<AuthProvider, LibraryProvider>(
-          // create metodu, LibraryProvider ilk oluşturulduğunda çağrılır.
-          // Burada AuthProvider'ın bir örneğini alır.
           create:
               (context) => LibraryProvider(
                 Provider.of<AuthProvider>(context, listen: false),
               ),
-          // update metodu, AuthProvider'da bir değişiklik olduğunda (notifyListeners çağrıldığında)
-          // veya bu ProxyProvider yeniden build edildiğinde çağrılır.
-          // LibraryProvider'ı yeni AuthProvider örneği ile günceller.
-          // previousLibraryProvider, önceki LibraryProvider örneğidir, state'i korumak için kullanılabilir.
-          update: (context, auth, previousLibraryProvider) {
-            // Eğer auth (AuthProvider) null ise (teorik olarak olmamalı ama bir güvenlik önlemi)
-            // veya previousLibraryProvider null ise (ilk oluşturma) yeni bir tane oluştur.
-            if (auth == null || previousLibraryProvider == null) {
-              return LibraryProvider(
-                auth ?? Provider.of<AuthProvider>(context, listen: false),
-              ); // auth null ise tekrar context'ten al
-            }
-            // AuthProvider değiştiyse, LibraryProvider'a yeni AuthProvider'ı ver.
-            // LibraryProvider'ın constructor'ında auth state'ine göre işlem yapılıyorsa
-            // bu yeni bir instance oluşturmak anlamına gelebilir veya mevcut instance'ı güncelleyebilir.
-            // Mevcut LibraryProvider constructor'ı AuthProvider'ı doğrudan kullanıyor.
-            // Dolayısıyla her AuthProvider güncellemesinde LibraryProvider'ın da güncellenmesi mantıklı.
-            // Veya, LibraryProvider'ın içinde AuthProvider'ı güncelleyen bir metot olabilirdi.
-            // Şimdilik, basitçe yeni bir AuthProvider ile yeni bir LibraryProvider oluşturuyoruz.
-            // Eğer LibraryProvider'ın kendi state'ini koruması gerekiyorsa (auth dışında),
-            // o zaman previousLibraryProvider.updateAuth(auth) gibi bir yapı daha iyi olabilirdi.
-            return LibraryProvider(auth);
-          },
+          update: (context, auth, previous) => LibraryProvider(auth),
+        ),
+        // YENİ TipProvider EKLEMESİ
+        ChangeNotifierProxyProvider<AuthProvider, TipProvider>(
+          create:
+              (context) => TipProvider(
+                Provider.of<AuthProvider>(context, listen: false),
+              ),
+          update: (context, auth, previous) => TipProvider(auth),
+          // previous parametresi (TipProvider?) null olabilir.
+          // Eğer TipProvider'ın state'ini korumak isterseniz:
+          // update: (context, auth, previousTipProvider) {
+          //   final tipProvider = previousTipProvider ?? TipProvider(auth);
+          //   // Eğer auth değiştiyse ve TipProvider'ın bazı işlemleri yeniden yapması gerekiyorsa:
+          //   // tipProvider.updateAuthProvider(auth); // TipProvider'a böyle bir metot ekleyerek
+          //   return tipProvider;
+          // },
         ),
       ],
       child: const MainApp(),
@@ -78,7 +64,6 @@ class MainApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Temel renkler
     const Color primaryOrange = Color(0xFFFF8128);
     const Color appBarBg = Color.fromARGB(255, 241, 247, 255);
     const Color appBarFg = Color(0xFF1F2937);
@@ -89,14 +74,12 @@ class MainApp extends StatelessWidget {
     return MaterialApp(
       title: 'Legito - Hızlı Okuma & Odaklanma',
       debugShowCheckedModeBanner: false,
-      // Lokalizasyon ayarları
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
       supportedLocales: const [Locale('tr', 'TR'), Locale('en', 'US')],
-      // locale: const Locale('tr', 'TR'), // Varsayılan dil (isteğe bağlı)
       theme: ThemeData(
         useMaterial3: true,
         colorScheme: ColorScheme(

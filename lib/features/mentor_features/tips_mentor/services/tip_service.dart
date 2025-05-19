@@ -2,50 +2,97 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../../../../core/constants/api_constants.dart';
-import '../../../../core/models/general_api_response_model.dart'; // Genel yanıt için
+import '../../../../core/models/general_api_response_model.dart';
 import '../models/tip_response_dto.dart';
 import '../models/tip_list_response_dto.dart';
 import '../models/create_update_tip_request_dto.dart';
-import '../models/create_tip_response_dto.dart'; // create ve update için
+import '../models/create_tip_response_dto.dart'; // Bu dosya CreateUpdateTipApiResponseDto'yu içermeli
 
 class TipService {
-  // PublicHomeScreen için rastgele ipucu
-  Future<TipResponseDto?> getRandomTip() async {
-    // Null dönebilir
+  Future<TipResponseDto?> getRandomTip({String? accessToken}) async {
     final Uri uri = Uri.parse(
       ApiConstants.baseUrl + ApiConstants.getRandomTipEndpoint,
     );
     print('TipService: Rastgele ipucu getiriliyor: ${uri.toString()}');
-    try {
-      final response = await http.get(
-        uri,
-        headers: {'Content-Type': 'application/json; charset=utf-8'},
-      );
+
+    Map<String, String> headers = {
+      'Content-Type': 'application/json; charset=utf-8',
+    };
+
+    if (accessToken != null && accessToken.isNotEmpty) {
+      headers['Authorization'] = 'Bearer $accessToken';
+      print('TipService (getRandomTip): Authorization header eklendi.');
+    } else {
       print(
-        'TipService (getRandomTip) Status: ${response.statusCode}, Body: ${response.body.substring(0, response.body.length > 100 ? 100 : response.body.length)}',
+        'TipService (getRandomTip): Authorization header eklenmedi (token yok veya boş).',
       );
+    }
+
+    try {
+      final response = await http.get(uri, headers: headers);
+      final String responseBody = utf8.decode(response.bodyBytes);
+      final String loggableBody =
+          responseBody.isNotEmpty
+              ? responseBody.substring(
+                0,
+                responseBody.length > 100 ? 100 : responseBody.length,
+              )
+              : "<empty>";
+      print(
+        'TipService (getRandomTip) Status: ${response.statusCode}, Body: $loggableBody',
+      );
+
       if (response.statusCode == 200) {
-        // API doğrudan TipResponseDto dönüyorsa
-        final Map<String, dynamic> responseData = jsonDecode(
-          utf8.decode(response.bodyBytes),
+        if (responseBody.isEmpty) {
+          print(
+            'TipService (getRandomTip) Hata: Yanıt başarılı (200) ama body boş.',
+          );
+          return null;
+        }
+        try {
+          final Map<String, dynamic> responseData = jsonDecode(responseBody);
+          // API'den gelen yanıt {"data": {tip_objesi}, "statusCode": ..., ...} şeklinde olduğu için
+          // 'data' anahtarının içindeki Map'i TipResponseDto.fromJson'a gönderiyoruz.
+          if (responseData.containsKey('data') &&
+              responseData['data'] != null &&
+              responseData['data'] is Map) {
+            return TipResponseDto.fromJson(
+              responseData['data'] as Map<String, dynamic>,
+            );
+          } else {
+            // Eğer 'data' anahtarı yoksa veya formatı beklenenden farklıysa, bu bir hatadır.
+            print(
+              'TipService (getRandomTip): Yanıt 200 OK ancak beklenen "data" anahtarı bulunamadı veya formatı yanlış. ResponseData: $responseData',
+            );
+            return null;
+          }
+        } catch (e) {
+          print(
+            'TipService (getRandomTip) JSON Parse Hata (Status 200): $e, Body: $responseBody',
+          );
+          return null;
+        }
+      } else if (response.statusCode == 404 &&
+          responseBody.toLowerCase().contains("no tip found")) {
+        print(
+          'TipService (getRandomTip): 404 - No Tip found. Null döndürülüyor.',
         );
-        return TipResponseDto.fromJson(responseData);
-        // Eğer API {isSuccess:..., data: TipResponseDto} dönüyorsa:
-        // final RandomTipApiResponse apiResponse = RandomTipApiResponse.fromJson(responseData);
-        // return apiResponse.isSuccess ? apiResponse.data : null;
+        return null;
+      } else if (response.statusCode == 401) {
+        print('TipService (getRandomTip) Hata: 401 Unauthorized.');
+        return null;
       } else {
         print(
-          'TipService (getRandomTip) Hata: ${response.statusCode} - ${response.body}',
+          'TipService (getRandomTip) Genel Hata: ${response.statusCode} - $responseBody',
         );
         return null;
       }
     } catch (e) {
-      print('TipService getRandomTip Hata: $e');
+      print('TipService getRandomTip Bağlantı/Diğer Hata: $e');
       return null;
     }
   }
 
-  // Mentor için kullanıcının (mentorun) ipuçlarını getir
   Future<TipListResponseDto> getUserTips(String accessToken) async {
     final Uri uri = Uri.parse(
       ApiConstants.baseUrl + ApiConstants.getUserTipsEndpoint,
@@ -59,43 +106,93 @@ class TipService {
           'Authorization': 'Bearer $accessToken',
         },
       );
+      final String responseBody = utf8.decode(response.bodyBytes);
+      final String loggableBody =
+          responseBody.length > 200
+              ? responseBody.substring(0, 200)
+              : responseBody;
       print(
-        'TipService (getUserTips) Status: ${response.statusCode}, Body: ${response.body.substring(0, response.body.length > 200 ? 200 : response.body.length)}',
-      );
-      final Map<String, dynamic> responseData = jsonDecode(
-        utf8.decode(response.bodyBytes),
+        'TipService (getUserTips) Status: ${response.statusCode}, Body: $loggableBody',
       );
 
+      Map<String, dynamic> responseData = {};
+      bool isJsonResponse = false;
+      if (responseBody.isNotEmpty) {
+        try {
+          responseData = jsonDecode(responseBody);
+          isJsonResponse = true;
+        } catch (e) {
+          if (response.statusCode != 200 && response.statusCode != 404)
+            return TipListResponseDto.failure(
+              "Sunucudan geçersiz yanıt formatı.",
+              statusCode: response.statusCode,
+            );
+        }
+      }
+
       if (response.statusCode == 200) {
+        if (!isJsonResponse && responseBody.isNotEmpty)
+          return TipListResponseDto.failure(
+            "Başarılı yanıt ancak formatı bozuk.",
+            statusCode: response.statusCode,
+          );
         return TipListResponseDto.fromJson(responseData);
+      } else if (response.statusCode == 404 &&
+          ((isJsonResponse &&
+                  responseData['errors'] != null &&
+                  (responseData['errors'] as List).any(
+                    (e) => e.toString().toLowerCase().contains("no tip found"),
+                  )) ||
+              (isJsonResponse &&
+                  responseData['message']?.toString().toLowerCase().contains(
+                        "no tip found",
+                      ) ==
+                      true) ||
+              (!isJsonResponse &&
+                  responseBody.toLowerCase().contains("no tip found")))) {
+        return TipListResponseDto(
+          isSuccess: true,
+          data: [],
+          message: "Henüz hiç ipucu bulunmamaktadır.",
+          statusCode: response.statusCode,
+          errors: null,
+        );
       } else {
+        String errorMessage =
+            "İpuçları getirilemedi (HTTP ${response.statusCode}).";
+        List<String>? errors;
+        if (isJsonResponse) {
+          errorMessage =
+              responseData['message'] ?? responseData['title'] ?? errorMessage;
+          if (responseData['errors'] is List)
+            errors = List<String>.from(responseData['errors']);
+          else if (responseData['errors'] is Map) {
+            errors = [];
+            (responseData['errors'] as Map).forEach((key, value) {
+              if (value is List) errors?.addAll(value.cast<String>());
+            });
+          }
+        } else if (responseBody.isNotEmpty)
+          errorMessage = responseBody;
         return TipListResponseDto.failure(
-          responseData['message'] ?? "İpuçları getirilemedi.",
-          errors:
-              responseData['errors'] != null
-                  ? List<String>.from(responseData['errors'])
-                  : null,
+          errorMessage,
+          errors: errors,
           statusCode: response.statusCode,
         );
       }
     } catch (e) {
-      print('TipService getUserTips Hata: $e');
       return TipListResponseDto.failure(
-        "İpuçları getirilirken bağlantı hatası: $e",
+        "İpuçları getirilirken bir bağlantı hatası oluştu: $e",
       );
     }
   }
 
-  // Mentor için yeni ipucu oluştur
   Future<CreateUpdateTipApiResponseDto> createTip(
     CreateUpdateTipRequestDto requestModel,
     String accessToken,
   ) async {
     final Uri uri = Uri.parse(
       ApiConstants.baseUrl + ApiConstants.createTipEndpoint,
-    );
-    print(
-      'TipService: İpucu oluşturuluyor: ${uri.toString()}, Data: ${jsonEncode(requestModel.toJson())}',
     );
     try {
       final response = await http.post(
@@ -106,17 +203,14 @@ class TipService {
         },
         body: jsonEncode(requestModel.toJson()),
       );
+      final String responseBody = utf8.decode(response.bodyBytes);
       print(
-        'TipService (createTip) Status: ${response.statusCode}, Body: ${response.body}',
+        'TipService (createTip) Status: ${response.statusCode}, Body: $responseBody',
       );
-      final Map<String, dynamic> responseData = jsonDecode(
-        utf8.decode(response.bodyBytes),
-      );
-
-      if (response.statusCode == 201 || response.statusCode == 200) {
-        // 201 Created
+      final Map<String, dynamic> responseData = jsonDecode(responseBody);
+      if (response.statusCode == 201 || response.statusCode == 200)
         return CreateUpdateTipApiResponseDto.fromJson(responseData);
-      } else {
+      else
         return CreateUpdateTipApiResponseDto.failure(
           responseData['message'] ?? "İpucu oluşturulamadı.",
           errors:
@@ -125,16 +219,13 @@ class TipService {
                   : null,
           statusCode: response.statusCode,
         );
-      }
     } catch (e) {
-      print('TipService createTip Hata: $e');
       return CreateUpdateTipApiResponseDto.failure(
         "İpucu oluşturulurken bağlantı hatası: $e",
       );
     }
   }
 
-  // Mentor için ipucu güncelle
   Future<CreateUpdateTipApiResponseDto> updateTip(
     String tipId,
     CreateUpdateTipRequestDto requestModel,
@@ -143,12 +234,8 @@ class TipService {
     final Uri uri = Uri.parse(
       '${ApiConstants.baseUrl}${ApiConstants.updateTipEndpoint}/$tipId',
     );
-    print(
-      'TipService: İpucu güncelleniyor: ${uri.toString()}, Data: ${jsonEncode(requestModel.toJson())}',
-    );
     try {
       final response = await http.put(
-        // PUT metodu
         uri,
         headers: {
           'Content-Type': 'application/json; charset=utf-8',
@@ -156,18 +243,21 @@ class TipService {
         },
         body: jsonEncode(requestModel.toJson()),
       );
+      final String responseBody = utf8.decode(response.bodyBytes);
       print(
-        'TipService (updateTip) Status: ${response.statusCode}, Body: ${response.body}',
+        'TipService (updateTip) Status: ${response.statusCode}, Body: $responseBody',
       );
-      final Map<String, dynamic> responseData = jsonDecode(
-        utf8.decode(response.bodyBytes),
-      );
-
       if (response.statusCode == 200 || response.statusCode == 204) {
-        return CreateUpdateTipApiResponseDto.fromJson(
-          responseData,
-        ); // API güncellenmiş tip dönebilir
+        if (responseBody.isEmpty || response.statusCode == 204)
+          return CreateUpdateTipApiResponseDto(
+            isSuccess: true,
+            message: "İpucu başarıyla güncellendi.",
+            statusCode: response.statusCode,
+          );
+        final Map<String, dynamic> responseData = jsonDecode(responseBody);
+        return CreateUpdateTipApiResponseDto.fromJson(responseData);
       } else {
+        final Map<String, dynamic> responseData = jsonDecode(responseBody);
         return CreateUpdateTipApiResponseDto.failure(
           responseData['message'] ?? "İpucu güncellenemedi.",
           errors:
@@ -178,14 +268,12 @@ class TipService {
         );
       }
     } catch (e) {
-      print('TipService updateTip Hata: $e');
       return CreateUpdateTipApiResponseDto.failure(
         "İpucu güncellenirken bağlantı hatası: $e",
       );
     }
   }
 
-  // Mentor için ipucu sil
   Future<GeneralApiResponseModel> deleteTip(
     String tipId,
     String accessToken,
@@ -193,7 +281,6 @@ class TipService {
     final Uri uri = Uri.parse(
       '${ApiConstants.baseUrl}${ApiConstants.deleteTipEndpoint}/$tipId',
     );
-    print('TipService: İpucu siliniyor: ${uri.toString()}');
     try {
       final response = await http.delete(
         uri,
@@ -202,37 +289,38 @@ class TipService {
           'Authorization': 'Bearer $accessToken',
         },
       );
+      final String responseBody = utf8.decode(response.bodyBytes);
       print(
-        'TipService (deleteTip) Status: ${response.statusCode}, Body: ${response.body}',
+        'TipService (deleteTip) Status: ${response.statusCode}, Body: $responseBody',
       );
       if (response.statusCode == 200 || response.statusCode == 204) {
-        if (response.body.isNotEmpty) {
-          final Map<String, dynamic> responseData = jsonDecode(
-            utf8.decode(response.bodyBytes),
-          );
+        if (responseBody.isNotEmpty) {
+          final Map<String, dynamic> responseData = jsonDecode(responseBody);
           return GeneralApiResponseModel.fromJson(responseData);
-        } else {
+        } else
           return GeneralApiResponseModel(
             isSuccess: true,
             message: "İpucu başarıyla silindi",
             statusCode: response.statusCode,
           );
-        }
       } else {
-        final Map<String, dynamic> responseData = jsonDecode(
-          utf8.decode(response.bodyBytes),
-        );
-        return GeneralApiResponseModel.failure(
-          responseData['message'] ?? "İpucu silinemedi.",
-          errors:
-              responseData['errors'] != null
-                  ? List<String>.from(responseData['errors'])
-                  : null,
-          statusCode: response.statusCode,
-        );
+        if (responseBody.isNotEmpty) {
+          final Map<String, dynamic> responseData = jsonDecode(responseBody);
+          return GeneralApiResponseModel.failure(
+            responseData['message'] ?? "İpucu silinemedi.",
+            errors:
+                responseData['errors'] != null
+                    ? List<String>.from(responseData['errors'])
+                    : null,
+            statusCode: response.statusCode,
+          );
+        } else
+          return GeneralApiResponseModel.failure(
+            "İpucu silinemedi. Durum Kodu: ${response.statusCode} (yanıt boş)",
+            statusCode: response.statusCode,
+          );
       }
     } catch (e) {
-      print('TipService deleteTip Hata: $e');
       return GeneralApiResponseModel.failure(
         "İpucu silinirken bağlantı hatası: $e",
       );

@@ -1,14 +1,15 @@
 // lib/features/home/screens/PublicHomeScreen.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../../core/enums/user_role.dart'; // Bu import'a gerek kalmayabilir eğer direkt AuthProvider.isUser() kullanılıyorsa
 import '../../../core/navigation/app_routes.dart';
 import '../../../state_management/auth_provider.dart';
+import '../../mentor_features/tips_mentor/state_management/tip_provider.dart';
+import '../../mentor_features/tips_mentor/models/tip_response_dto.dart';
+// ApiTipAvatar enum'ını import etmeye gerek yok, index'i kullanıyoruz.
 
 class PublicHomeScreen extends StatefulWidget {
   const PublicHomeScreen({Key? key}) : super(key: key);
 
-  // Renk ve Gradient sabitleri
   static const Gradient greenGradient = LinearGradient(
     colors: [Color(0xFF34D399), Color(0xFF059669)],
     begin: Alignment.topLeft,
@@ -34,13 +35,34 @@ class PublicHomeScreen extends StatefulWidget {
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
-
   static const Color textDark = Color(0xFF1F2937);
   static const Color textLight = Colors.white;
   static const Color bottomNavBackground = Color(0xFFF0F0F0);
   static const Color bottomNavIconColor = Color(0xFF303030);
   static const Color fabBackground = Color.fromARGB(255, 34, 34, 34);
   static const Color fabIconColor = Color.fromRGBO(255, 130, 40, 1);
+
+  // Bu liste ApiTipAvatar enum'ının sırasıyla (0:Cow, 1:Tiger, 2:Dog, 3:Bird, 4:Rabbit) eşleşmeli
+  static const List<String> tipAnimalIconPaths = [
+    'assets/images/cow.png',
+    'assets/images/tiger.png',
+    'assets/images/dog_tip.png', // Varsayılan olarak bu kullanılabilir
+    'assets/images/bird.png',
+    'assets/images/bunny.png', // 'bunny.png' veya 'rabbit.png' (TipsPage'dekiyle aynı olmalı)
+  ];
+
+  static String getTipAvatarPath(int apiAvatarIndex) {
+    if (apiAvatarIndex >= 0 && apiAvatarIndex < tipAnimalIconPaths.length) {
+      return tipAnimalIconPaths[apiAvatarIndex];
+    }
+    // Eğer index geçersizse veya liste dışındaysa, varsayılan bir ikon döndür
+    print(
+      "PublicHomeScreen Uyarı: Geçersiz avatar index'i ($apiAvatarIndex). Varsayılan kullanılıyor.",
+    );
+    return tipAnimalIconPaths.isNotEmpty
+        ? tipAnimalIconPaths[2]
+        : 'assets/images/dog_tip.png'; // Güvenli varsayılan
+  }
 
   @override
   State<PublicHomeScreen> createState() => _PublicHomeScreenState();
@@ -50,20 +72,10 @@ class _PublicHomeScreenState extends State<PublicHomeScreen> {
   @override
   void initState() {
     super.initState();
-    // initState içinde context'e bağlı işlemler için addPostFrameCallback kullanmak güvenlidir.
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      // context'in build metodu tamamlandıktan sonra Provider'a erişim sağlıyoruz.
       if (mounted) {
-        // Widget'ın hala ağaçta olduğundan emin ol
         final authProvider = Provider.of<AuthProvider>(context, listen: false);
-        print(
-          "PublicHomeScreen initState: Auth Durumu: ${authProvider.isAuthenticated}, Kullanıcı Rolü: ${authProvider.userRole}, Kullanıcı mı?: ${authProvider.isUser()}",
-        );
         if (!authProvider.isAuthenticated || !authProvider.isUser()) {
-          print(
-            "PublicHomeScreen initState: Yetkisiz veya yanlış rol. Login'e yönlendiriliyor.",
-          );
-          // Yönlendirme yapmadan önce widget'ın hala mounted olup olmadığını tekrar kontrol etmek iyi bir pratiktir.
           if (mounted) {
             Navigator.pushNamedAndRemoveUntil(
               context,
@@ -72,73 +84,46 @@ class _PublicHomeScreenState extends State<PublicHomeScreen> {
             );
           }
         } else {
-          print(
-            "PublicHomeScreen initState: Kullanıcı yetkili. Hoş geldiniz: ${authProvider.displayName ?? 'Kullanıcı'}. Profil Resmi URL: ${authProvider.profilePhotoUrl}",
-          );
+          // Kullanıcı yetkiliyse rastgele ipucunu çek
+          // Sayfa her açıldığında yeni bir ipucu çekmek için burada çağırılabilir.
+          Provider.of<TipProvider>(
+            context,
+            listen: false,
+          ).fetchRandomTipForPublicHome();
         }
       }
     });
   }
 
   void _onItemTapped(int index, String tappedItemLabel) {
-    print('--- PublicHomeScreen _onItemTapped BAŞLANGIÇ ---');
-    print('Alınan Index: $index');
-    print('Alınan Label: "$tappedItemLabel"');
-
     String? routeNameAssigned;
     switch (index) {
-      case 0: // İlerlemem
+      case 0:
         routeNameAssigned = AppRoutes.userDashboard;
         break;
-      case 1: // Kitaplığım
+      case 1:
         routeNameAssigned = AppRoutes.library;
         break;
-      case 2: // Destek
+      case 2:
         routeNameAssigned = AppRoutes.supportUser;
         break;
-      case 3: // Hesabım
+      case 3:
         routeNameAssigned = AppRoutes.account;
         break;
-      default:
-        routeNameAssigned = null;
     }
-    print('Switch sonrası routeNameAssigned değeri: $routeNameAssigned');
     if (routeNameAssigned != null) {
-      print('Yönlendirme denenecek: $routeNameAssigned');
-      // Navigator.pushNamed'i try-catch içine almak, rota bulunamazsa hatayı yakalamak için iyidir.
-      try {
+      if (ModalRoute.of(context)?.settings.name != routeNameAssigned) {
+        // Zaten o sayfada değilse
         Navigator.pushNamed(context, routeNameAssigned);
-        print('Navigator.pushNamed("$routeNameAssigned") başarıyla çağrıldı.');
-      } catch (e, s) {
-        print(
-          'Navigator.pushNamed çağrılırken HATA: $e. Rota tanımlı mı kontrol edin.',
-        );
-        print('Stack Trace: $s');
-        // Kullanıcıya hata mesajı gösterilebilir
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Sayfa bulunamadı: $routeNameAssigned")),
-        );
       }
-    } else {
-      print('Rota adı null, yönlendirme yapılmayacak.');
     }
-    print('--- PublicHomeScreen _onItemTapped BİTİŞ ---');
   }
 
   @override
   Widget build(BuildContext context) {
-    // Build metodunda Provider.of ile authProvider'a erişirken listen: true (varsayılan) olmalı
-    // ki AuthProvider'daki değişikliklerde bu widget yeniden build edilsin.
     final authProvider = Provider.of<AuthProvider>(context);
 
-    // initState'te yapılan kontrol build'de de olmalı, çünkü state değişebilir.
     if (!authProvider.isAuthenticated || !authProvider.isUser()) {
-      print(
-        "PublicHomeScreen build: Yetkisiz veya yanlış rol. Login'e yönlendirme beklemede veya yükleme ekranı.",
-      );
-      // initState'deki yönlendirme gerçekleşene kadar bir yükleme göstergesi göstermek daha iyi olabilir.
-      // Ancak initState'teki yönlendirme çok hızlı olacağından, bu blok nadiren uzun süre görünür.
-      // Eğer yönlendirme anlık değilse, bu return önemli.
       return const Scaffold(
         body: Center(
           child: Column(
@@ -153,30 +138,19 @@ class _PublicHomeScreenState extends State<PublicHomeScreen> {
       );
     }
 
-    print(
-      "PublicHomeScreen build: Kullanıcı yetkili. Sayfa oluşturuluyor. Profil URL: ${authProvider.profilePhotoUrl}",
-    );
-
-    const String placeholderProfileImage =
-        'assets/images/profile.png'; // Bu dosyanın assets altında olduğundan emin olun
+    const String placeholderProfileImage = 'assets/images/profile.png';
     const double desiredAppBarContentHeight = 44;
     const double appBarVerticalPadding = 20.0;
     const double totalAppBarHeight =
         desiredAppBarContentHeight + (appBarVerticalPadding * 2);
 
-    // Profil resmi için ImageProvider'ı belirleyelim
     ImageProvider profileImage;
     final photoUrl = authProvider.profilePhotoUrl;
-
     if (photoUrl != null &&
         photoUrl.trim().isNotEmpty &&
         (photoUrl.startsWith('http://') || photoUrl.startsWith('https://'))) {
-      print("PublicHomeScreen build: NetworkImage kullanılacak: $photoUrl");
       profileImage = NetworkImage(photoUrl);
     } else {
-      print(
-        "PublicHomeScreen build: AssetImage (placeholder) kullanılacak. Gelen URL: $photoUrl",
-      );
       profileImage = const AssetImage(placeholderProfileImage);
     }
 
@@ -194,20 +168,13 @@ class _PublicHomeScreenState extends State<PublicHomeScreen> {
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               CircleAvatar(
-                radius: 30, // AppBar için uygun bir boyut
-                backgroundColor:
-                    Colors
-                        .grey
-                        .shade300, // NetworkImage yüklenirken görünecek arka plan
-                backgroundImage:
-                    profileImage, // Önceden belirlenen ImageProvider
+                radius: 30,
+                backgroundColor: Colors.grey.shade300,
+                backgroundImage: profileImage,
                 onBackgroundImageError: (exception, stackTrace) {
-                  // NetworkImage yüklenirken hata olursa burası çalışır.
-                  // İsteğe bağlı olarak loglama yapabilir veya placeholder'ı burada set edebilirsiniz.
                   print(
-                    "PublicHomeScreen AppBar CircleAvatar HATA: NetworkImage yüklenemedi. URL: $photoUrl, Hata: $exception",
+                    "AppBar CircleAvatar HATA: URL: $photoUrl, Hata: $exception",
                   );
-                  // Bu durumda placeholder zaten `profileImage` içinde set edilmiş olmalı.
                 },
               ),
               const SizedBox(width: 12),
@@ -248,19 +215,45 @@ class _PublicHomeScreenState extends State<PublicHomeScreen> {
       body: SafeArea(
         top: false,
         bottom: true,
-        child: SingleChildScrollView(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(20.0, 20.0, 20.0, 16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildDidYouKnowBanner(),
-                const SizedBox(height: 30),
-                _buildQuickStartTitle(),
-                const SizedBox(height: 20),
-                _buildQuickStartGrid(context),
-                const SizedBox(height: 80), // BottomNav ve FAB için boşluk
-              ],
+        child: RefreshIndicator(
+          // Rastgele ipucunu yenilemek için
+          onRefresh:
+              () =>
+                  Provider.of<TipProvider>(
+                    context,
+                    listen: false,
+                  ).fetchRandomTipForPublicHome(),
+          color: PublicHomeScreen.orangeGradient.colors.first,
+          child: SingleChildScrollView(
+            physics:
+                const AlwaysScrollableScrollPhysics(), // RefreshIndicator için
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20.0, 20.0, 20.0, 16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Consumer<TipProvider>(
+                    builder: (context, tipProvider, child) {
+                      if (tipProvider.isLoading &&
+                          tipProvider.randomTipForPublicHome == null) {
+                        return const SizedBox(
+                          height: 124,
+                          child: Center(child: CircularProgressIndicator()),
+                        );
+                      }
+                      // Hata durumu ayrıca ele alınabilir (tipProvider.errorMessage)
+                      return _buildDidYouKnowBanner(
+                        tipProvider.randomTipForPublicHome,
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 30),
+                  _buildQuickStartTitle(),
+                  const SizedBox(height: 20),
+                  _buildQuickStartGrid(context),
+                  const SizedBox(height: 80),
+                ],
+              ),
             ),
           ),
         ),
@@ -271,12 +264,18 @@ class _PublicHomeScreenState extends State<PublicHomeScreen> {
     );
   }
 
-  Widget _buildDidYouKnowBanner() {
-    const String longText =
-        'Lorem ipsum dolor sit amet consectetur adipisicing elit. Faucibus duis blandit in. ';
+  Widget _buildDidYouKnowBanner(TipResponseDto? tip) {
     const double dogImageHeight = 120.0;
+    String title = tip?.title ?? 'Biliyor muydun?';
+    String content = tip?.content ?? 'Yeni bir ipucu için sayfayı yenileyin!';
+    String imagePath =
+        (tip != null)
+            ? PublicHomeScreen.getTipAvatarPath(tip.avatar)
+            : PublicHomeScreen.tipAnimalIconPaths[2]; // Varsayılan dog_tip
+
     return Container(
       width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 2.0),
       decoration: BoxDecoration(
         gradient: PublicHomeScreen.blackGradient,
         borderRadius: BorderRadius.circular(20),
@@ -288,46 +287,44 @@ class _PublicHomeScreenState extends State<PublicHomeScreen> {
           ),
         ],
       ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 2.0),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Image.asset(
-              'assets/images/dog.png',
-              height: dogImageHeight,
-            ), // Bu resmin assets'te olduğundan emin olun
-            const SizedBox(width: 15),
-            const Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    'Biliyor muydun?',
-                    style: TextStyle(
-                      color: PublicHomeScreen.textLight,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Image.asset(imagePath, height: dogImageHeight, fit: BoxFit.contain),
+          const SizedBox(width: 15),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: PublicHomeScreen.textLight,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
                   ),
-                  SizedBox(height: 5),
-                  Padding(
-                    padding: EdgeInsets.only(right: 5.0),
-                    child: Text(
-                      longText,
-                      style: TextStyle(
-                        color: Color.fromARGB(255, 241, 241, 241),
-                        fontSize: 13,
-                        height: 1.3,
-                      ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 5),
+                Padding(
+                  padding: const EdgeInsets.only(right: 5.0),
+                  child: Text(
+                    content,
+                    style: const TextStyle(
+                      color: Color.fromARGB(255, 241, 241, 241),
+                      fontSize: 13,
+                      height: 1.3,
                     ),
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -387,10 +384,7 @@ class _PublicHomeScreenState extends State<PublicHomeScreen> {
               Positioned(
                 right: -10,
                 bottom: -10,
-                child: Image.asset(
-                  imagePath,
-                  height: imageHeight,
-                ), // Bu resimlerin assets'te olduğundan emin olun
+                child: Image.asset(imagePath, height: imageHeight),
               ),
             ],
           ),
@@ -404,61 +398,41 @@ class _PublicHomeScreenState extends State<PublicHomeScreen> {
       physics: const NeverScrollableScrollPhysics(),
       crossAxisSpacing: 15,
       mainAxisSpacing: 15,
-      childAspectRatio: 1.05, // Kartların en-boy oranını ayarlar
+      childAspectRatio: 1.05,
       children: [
         buildGridItem(
           title: 'Odağını\nGeliştir',
           backgroundGradient: PublicHomeScreen.greenGradient,
-          imagePath: 'assets/images/target.png', // Assets kontrolü
+          imagePath: 'assets/images/target.png',
           imageHeight: 110,
-          onTap: () {
-            print('DEBUG: "Odağını Geliştir" tıklandı.');
-            // Navigator.pushNamed(context, AppRoutes.focusTrainingPage); // Örnek bir rota
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text("Odağını Geliştir sayfası henüz tanımlanmadı."),
+          onTap:
+              () => ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text("Bu özellik yakında!")),
               ),
-            );
-          },
         ),
         buildGridItem(
           title: 'Kelimeleri\nKavra',
           backgroundGradient: PublicHomeScreen.blueGradient,
-          imagePath: 'assets/images/notepad.png', // Assets kontrolü
+          imagePath: 'assets/images/notepad.png',
           imageHeight: 115,
-          onTap: () {
-            print('DEBUG: "Kelimeleri Kavra" tıklandı.');
-            // Navigator.pushNamed(context, AppRoutes.vocabularyPage); // Örnek bir rota
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text("Kelimeleri Kavra sayfası henüz tanımlanmadı."),
+          onTap:
+              () => ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text("Bu özellik yakında!")),
               ),
-            );
-          },
         ),
         buildGridItem(
           title: 'Okumaya\nBaşla',
           backgroundGradient: PublicHomeScreen.purpleGradient,
-          imagePath: 'assets/images/book.png', // Assets kontrolü
+          imagePath: 'assets/images/book.png',
           imageHeight: 110,
-          onTap: () {
-            print(
-              'DEBUG: "Okumaya Başla" tıklandı -> Yönlendiriliyor: ${AppRoutes.library}',
-            );
-            Navigator.pushNamed(context, AppRoutes.library);
-          },
+          onTap: () => Navigator.pushNamed(context, AppRoutes.library),
         ),
         buildGridItem(
           title: 'Teknikleri\nÖğren',
           backgroundGradient: PublicHomeScreen.orangeGradient,
-          imagePath: 'assets/images/tablet.png', // Assets kontrolü
+          imagePath: 'assets/images/tablet.png',
           imageHeight: 115,
-          onTap: () {
-            print(
-              'DEBUG: "Teknikleri Öğren" tıklandı -> Yönlendiriliyor: ${AppRoutes.techniquesUser}',
-            );
-            Navigator.pushNamed(context, AppRoutes.techniquesUser);
-          },
+          onTap: () => Navigator.pushNamed(context, AppRoutes.techniquesUser),
         ),
       ],
     );
@@ -472,40 +446,19 @@ class _PublicHomeScreenState extends State<PublicHomeScreen> {
       String targetRouteName,
     ) {
       final currentRoute = ModalRoute.of(context)?.settings.name;
-      bool isSelected = false;
-
-      // PublicHomeScreen'deyken "İlerlemem" (index 0) seçili olmalı
-      if (currentRoute == AppRoutes.publicHome && itemIndex == 0) {
-        isSelected = true;
-      }
-      // userDashboard'dayken "İlerlemem" (index 0) seçili olmalı
-      else if (currentRoute == AppRoutes.userDashboard && itemIndex == 0) {
-        isSelected = true;
-      }
-      // Diğer durumlarda, hedef rota mevcut rota ile eşleşiyorsa seçili
-      else if (targetRouteName == currentRoute) {
-        isSelected = true;
-      }
-
+      bool isSelected =
+          (currentRoute == AppRoutes.publicHome && itemIndex == 0) ||
+          (currentRoute == AppRoutes.userDashboard && itemIndex == 0) ||
+          (targetRouteName == currentRoute);
       Color itemColor =
           isSelected
               ? PublicHomeScreen.fabIconColor
               : PublicHomeScreen.bottomNavIconColor;
-
       return Expanded(
         child: InkWell(
           onTap: () {
-            print(
-              '--- buildNavItem onTap İÇİNDE --- Label: "$label", Index: $itemIndex, Hedef Rota: $targetRouteName',
-            );
-            // Eğer zaten o sayfadaysak tekrar push etmeyelim (isteğe bağlı)
-            if (currentRoute != targetRouteName) {
+            if (currentRoute != targetRouteName)
               _onItemTapped(itemIndex, label);
-            } else {
-              print(
-                'Zaten "$label" ($targetRouteName) sayfasındasınız. Yönlendirme yapılmadı.',
-              );
-            }
           },
           splashColor: Colors.transparent,
           highlightColor: Colors.transparent,
@@ -513,12 +466,7 @@ class _PublicHomeScreenState extends State<PublicHomeScreen> {
             mainAxisSize: MainAxisSize.min,
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Image.asset(
-                imagePath,
-                height: 35,
-                width: 35,
-                color: itemColor,
-              ), // Bu resimlerin assets'te olduğundan emin olun
+              Image.asset(imagePath, height: 35, width: 35, color: itemColor),
               const SizedBox(height: 3),
               Text(
                 label,
@@ -539,9 +487,9 @@ class _PublicHomeScreenState extends State<PublicHomeScreen> {
       shape: const CircularNotchedRectangle(),
       notchMargin: 8.0,
       color: PublicHomeScreen.bottomNavBackground,
-      elevation: 10, // Gölge
+      elevation: 10,
       child: SizedBox(
-        height: 65, // BottomAppBar yüksekliği
+        height: 65,
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: <Widget>[
@@ -557,7 +505,7 @@ class _PublicHomeScreenState extends State<PublicHomeScreen> {
               1,
               AppRoutes.library,
             ),
-            const SizedBox(width: 50), // FAB için boşluk
+            const SizedBox(width: 50),
             buildNavItem(
               'assets/images/support_icon.png',
               'Destek',
@@ -584,24 +532,19 @@ class _PublicHomeScreenState extends State<PublicHomeScreen> {
         shape: BoxShape.circle,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.15), // Daha yumuşak bir gölge
+            color: Colors.black.withOpacity(0.15),
             blurRadius: 8,
             offset: const Offset(0, 4),
           ),
         ],
       ),
       child: FloatingActionButton(
-        shape: const CircleBorder(), // Tam daire olmasını sağlar
-        onPressed: () {
-          print(
-            'DEBUG: FAB tıklandı -> Yönlendiriliyor: ${AppRoutes.techniquesUser}',
-          );
-          Navigator.pushNamed(context, AppRoutes.techniquesUser);
-        },
+        shape: const CircleBorder(),
+        onPressed: () => Navigator.pushNamed(context, AppRoutes.techniquesUser),
         backgroundColor: PublicHomeScreen.fabBackground,
-        elevation: 0, // Container'ın gölgesi kullanılacak
+        elevation: 0,
         child: Image.asset(
-          'assets/images/grid_icon.png', // Bu resmin assets'te olduğundan emin olun
+          'assets/images/grid_icon.png',
           height: 30,
           width: 30,
           color: PublicHomeScreen.fabIconColor,
