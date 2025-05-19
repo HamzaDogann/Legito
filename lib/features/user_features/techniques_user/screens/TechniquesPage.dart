@@ -1,23 +1,35 @@
 // lib/features/user_features/techniques_user/screens/TechniquesPage.dart
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../../../core/navigation/app_routes.dart';
 import '../../../../shared_widgets/content_card_widget.dart';
 import '../../../../state_management/auth_provider.dart';
 import '../models/lesson_detail_args.dart';
+// CourseProvider ve UI modeli TechniqueItem için importlar
+import '../../../course/state_management/course_provider.dart';
+import '../../../course/models/course_item_dto.dart'; // API DTO'su, provider'dan UI modeline maplenecek
 
-// Teknik kartlarını temsil edecek model
+// TechniquesPage içinde kullanılan UI modeli
 class TechniqueItem {
   final String id;
-  final String coverImageUrl; // ContentCardWidget'a coverImage olarak geçilecek
+  final String coverImageUrl;
   final String title;
-  final String? mentor;
+  final String? mentorName; // API'den bu bilgi gelmiyorsa null olacak
+  final String? videoUrl; // LessonDetailPage için
+  final String? description; // LessonDetailPage için
+  final String publishDateFormatted; // API'deki createdDate'den formatlanacak
+  final String viewCountFormatted; // API'deki viewCount'tan formatlanacak
 
   TechniqueItem({
     required this.id,
     required this.coverImageUrl,
     required this.title,
-    this.mentor,
+    this.mentorName,
+    this.videoUrl,
+    this.description,
+    required this.publishDateFormatted,
+    required this.viewCountFormatted,
   });
 }
 
@@ -33,151 +45,93 @@ class _TechniquesPageState extends State<TechniquesPage> {
   static const Color searchButtonColor = Color(0xFFFF8128);
   static const Color searchInputHintColor = Color(0xFF9CA3AF);
   static const Color sectionTitleColor = Color(0xFF374151);
-
-  // Örnek resim URL'si
   static const String _defaultCoverImageUrl =
-      'https://ichef.bbci.co.uk/news/1024/cpsprodpb/14235/production/_100058428_mediaitem100058424.jpg.webp';
-
-  final List<TechniqueItem> _popularTechniques = [
-    TechniqueItem(
-      id: 'p1',
-      coverImageUrl: _defaultCoverImageUrl,
-      title: 'Hızlı Okuma Tekniği A ve Daha Fazla Uzun Başlık Denemesi',
-      mentor: 'Dr. Hızlı Oku',
-    ),
-    TechniqueItem(
-      id: 'p2',
-      coverImageUrl: _defaultCoverImageUrl,
-      title: 'Anlama Odaklı Yöntem',
-      mentor: 'Prof. Anlar',
-    ),
-    TechniqueItem(
-      id: 'p3',
-      coverImageUrl: _defaultCoverImageUrl,
-      title: 'Kelime Ezberleme Stratejisi',
-      mentor: 'Uz. Dil Bilir',
-    ),
-    TechniqueItem(
-      id: 'p4',
-      coverImageUrl: _defaultCoverImageUrl,
-      title: 'Not Alma Sanatı',
-      mentor: 'Yazar Not Alır',
-    ),
-    TechniqueItem(
-      id: 'p5',
-      coverImageUrl: _defaultCoverImageUrl,
-      title: 'Zihin Haritalama',
-      mentor: 'Kaşif Zihin',
-    ),
-  ];
-
-  final List<TechniqueItem> _recentTechniques = [
-    TechniqueItem(
-      id: 'r1',
-      coverImageUrl: _defaultCoverImageUrl,
-      title: 'Görselleştirme Tekniği',
-      mentor: 'Hayal Perest',
-    ),
-    TechniqueItem(
-      id: 'r2',
-      coverImageUrl: _defaultCoverImageUrl,
-      title: 'SQ3R Metodu',
-      mentor: 'Metodik Yaklaşımcı',
-    ),
-    TechniqueItem(
-      id: 'r3',
-      coverImageUrl: _defaultCoverImageUrl,
-      title: 'Pomodoro ile Çalışma',
-      mentor: 'Zaman Yöneticisi',
-    ),
-    TechniqueItem(
-      id: 'r4',
-      coverImageUrl: _defaultCoverImageUrl,
-      title: 'Eleştirel Okuma',
-      mentor: 'Sorgulayan Akıl',
-    ),
-  ];
+      'assets/images/default_course_cover.png'; // Varsayılan kapak
 
   final TextEditingController _searchController = TextEditingController();
-  String _searchTerm = '';
-  List<TechniqueItem> _searchResults = [];
-  bool _isSearching = false;
+  // _searchTerm, _searchResults, _isSearching artık CourseProvider tarafından yönetilecek
 
   @override
   void initState() {
     super.initState();
-    _searchController.addListener(_onSearchChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
-      if (!authProvider.isAuthenticated || !authProvider.isUser()) {
-        print("TechniquesPage initState: Yetkisiz. Login'e yönlendiriliyor.");
-        Navigator.pushNamedAndRemoveUntil(
+      if (!authProvider.isAuthenticated) {
+        // Sadece auth kontrolü, rol kontrolü CourseProvider'da yapılabilir
+        if (mounted)
+          Navigator.pushNamedAndRemoveUntil(
+            context,
+            AppRoutes.login,
+            (route) => false,
+          );
+      } else {
+        // Verileri CourseProvider üzerinden çek
+        final courseProvider = Provider.of<CourseProvider>(
           context,
-          AppRoutes.login,
-          (route) => false,
+          listen: false,
         );
-      } else {
-        print("TechniquesPage initState: Yetkili kullanıcı.");
+        courseProvider.fetchCourseIndex(); // Popüler ve son eklenenleri yükle
+        // Arama çubuğu için listener
+        _searchController.addListener(() {
+          final query = _searchController.text;
+          if (query.isNotEmpty) {
+            courseProvider.searchCourses(query);
+          } else {
+            courseProvider
+                .clearSearchResults(); // Arama boşsa sonuçları temizle
+          }
+        });
       }
-    });
-  }
-
-  void _onSearchChanged() {
-    setState(() {
-      _searchTerm = _searchController.text;
-      if (_searchTerm.isNotEmpty) {
-        _isSearching = true;
-        _performSearch();
-      } else {
-        _isSearching = false;
-        _searchResults.clear();
-      }
-    });
-  }
-
-  void _performSearch() {
-    if (_searchTerm.isEmpty) {
-      setState(() => _searchResults.clear());
-      return;
-    }
-    final allTechniques = [..._popularTechniques, ..._recentTechniques];
-    setState(() {
-      _searchResults =
-          allTechniques
-              .where(
-                (tech) => tech.title.toLowerCase().contains(
-                  _searchTerm.toLowerCase(),
-                ),
-              )
-              .toList();
     });
   }
 
   @override
   void dispose() {
-    _searchController.removeListener(_onSearchChanged);
     _searchController.dispose();
     super.dispose();
   }
 
-  void _navigateToLessonDetail(TechniqueItem technique) {
-    print(
-      'DEBUG: _navigateToLessonDetail çağrıldı. Teknik: ${technique.title}, ID: ${technique.id}',
+  // CourseItemDto'yu UI'da kullanılacak TechniqueItem'a çeviren helper
+  TechniqueItem _mapCourseItemDtoToTechniqueItem(CourseItemDto dto) {
+    return TechniqueItem(
+      id: dto.id,
+      coverImageUrl: dto.thumbnail ?? _defaultCoverImageUrl,
+      title: dto.title,
+      mentorName: null, // API'den mentor adı gelmiyorsa null
+      videoUrl: dto.video, // API'den video URL'si geliyorsa
+      description: null, // Detay sayfasında API'den çekilecek
+      publishDateFormatted: DateFormat(
+        'dd MMM yyyy',
+        'tr_TR',
+      ).format(dto.createdDate),
+      viewCountFormatted: "${dto.viewCount} G", // "G" Görüntülenme için
     );
+  }
+
+  void _navigateToLessonDetail(TechniqueItem technique) {
+    // CourseProvider'dan tam detayı çekip LessonDetailArgs'ı doldurabiliriz
+    // Veya mevcut bilgilerle LessonDetailArgs oluşturup, detay sayfasında API'den tam veriyi çekeriz.
+    // Şimdilik mevcut bilgileri ve örnek videoUrl/description kullanıyoruz.
+    // LessonDetailPage'in kendisi API'den tam detayı çekecek şekilde güncellenmeli.
+    print('TechniquesPage: Derse git: ${technique.title}, ID: ${technique.id}');
     Navigator.pushNamed(
       context,
       AppRoutes.lessonDetailUser,
       arguments: LessonDetailArgs(
         lessonId: technique.id,
         title: technique.title,
+        // Bu alanlar CourseDetailDto'dan gelmeli, şimdilik placeholder
         videoUrl:
-            'https://flutter.github.io/assets-for-api-docs/assets/videos/butterfly.mp4', // Örnek URL
+            technique.videoUrl ??
+            'https://flutter.github.io/assets-for-api-docs/assets/videos/butterfly.mp4',
         description:
-            'Bu ${technique.title} tekniği için örnek bir açıklamadır. Detaylar yakında eklenecektir.',
-        initialFavoriteState: false,
-        viewCount: "100+",
-        likeCount: "10+",
-        publishDate: "Ocak 2024",
+            technique.description ??
+            'Bu ${technique.title} tekniği için örnek bir açıklamadır.',
+        initialFavoriteState: false, // Bu bilgi API'den gelmeli
+        viewCount: technique.viewCountFormatted, // CourseItemDto'dan geliyor
+        likeCount: "0+", // Bu bilgi API'den (CourseDetailDto) gelmeli
+        publishDate:
+            technique.publishDateFormatted, // CourseItemDto'dan geliyor
       ),
     );
   }
@@ -185,7 +139,7 @@ class _TechniquesPageState extends State<TechniquesPage> {
   @override
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    if (!authProvider.isAuthenticated || !authProvider.isUser()) {
+    if (!authProvider.isAuthenticated) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
@@ -195,31 +149,76 @@ class _TechniquesPageState extends State<TechniquesPage> {
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () {
-            if (Navigator.canPop(context)) {
+            if (Navigator.canPop(context))
               Navigator.of(context).pop();
-            } else {
+            else
               Navigator.pushReplacementNamed(context, AppRoutes.publicHome);
-            }
           },
         ),
         title: const Text('Teknikleri Öğren'),
         centerTitle: false,
         titleSpacing: 0,
       ),
-      body: Column(
-        children: [
-          _buildSearchBar(),
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 20.0,
-                vertical: 24.0,
-              ),
-              child:
-                  _isSearching ? _buildSearchResults() : _buildDefaultContent(),
-            ),
-          ),
-        ],
+      body: Consumer<CourseProvider>(
+        // CourseProvider'ı dinle
+        builder: (context, courseProvider, child) {
+          bool isSearching = _searchController.text.isNotEmpty;
+
+          return Column(
+            children: [
+              _buildSearchBar(), // Arama çubuğu her zaman görünür
+              if (courseProvider.isLoadingIndex &&
+                  !isSearching &&
+                  courseProvider.popularCourses.isEmpty &&
+                  courseProvider.lastCreatedCourses.isEmpty)
+                const Expanded(
+                  child: Center(
+                    child: CircularProgressIndicator(color: Colors.orange),
+                  ),
+                )
+              else if (courseProvider.isLoadingSearch &&
+                  isSearching &&
+                  courseProvider.searchResults.isEmpty)
+                const Expanded(
+                  child: Center(
+                    child: CircularProgressIndicator(color: Colors.orange),
+                  ),
+                )
+              else if (isSearching)
+                Expanded(
+                  child: _buildSearchResults(
+                    courseProvider.searchResults
+                        .map(_mapCourseItemDtoToTechniqueItem)
+                        .toList(),
+                  ),
+                )
+              else
+                Expanded(
+                  child: RefreshIndicator(
+                    onRefresh: () => courseProvider.fetchCourseIndex(),
+                    color: searchButtonColor,
+                    child: SingleChildScrollView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20.0,
+                        vertical: 24.0,
+                      ),
+                      child: _buildDefaultContent(
+                        courseProvider.popularCourses
+                            .map(_mapCourseItemDtoToTechniqueItem)
+                            .toList(),
+                        courseProvider.lastCreatedCourses
+                            .map(_mapCourseItemDtoToTechniqueItem)
+                            .toList(),
+                        courseProvider
+                            .isLoadingIndex, // Refresh sırasında küçük indicator için
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -232,81 +231,104 @@ class _TechniquesPageState extends State<TechniquesPage> {
         top: 20.0,
         bottom: 10.0,
       ),
-      child: Row(
-        children: [
-          Expanded(
-            child: TextField(
-              controller: _searchController,
-              decoration: InputDecoration(
-                hintText: 'Tekniklerde Ara...',
-                hintStyle: const TextStyle(
-                  color: searchInputHintColor,
-                  fontSize: 16,
-                ),
-                prefixIcon: Icon(
-                  Icons.search,
-                  color: Colors.grey.shade600,
-                  size: 22,
-                ),
-                filled: true,
-                fillColor: Colors.grey.shade100,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(
-                    color: searchButtonColor,
-                    width: 1.5,
-                  ),
-                ),
-                contentPadding: const EdgeInsets.symmetric(
-                  vertical: 14,
-                  horizontal: 16,
-                ),
-                suffixIcon:
-                    _searchTerm.isNotEmpty
-                        ? IconButton(
-                          icon: Icon(
-                            Icons.clear,
-                            color: Colors.grey.shade600,
-                            size: 20,
-                          ),
-                          onPressed: () {
-                            _searchController.clear();
-                          },
-                        )
-                        : null,
-              ),
-              style: const TextStyle(color: textDark, fontSize: 16),
-            ),
+      child: TextField(
+        controller: _searchController,
+        decoration: InputDecoration(
+          hintText: 'Tekniklerde Ara...',
+          hintStyle: const TextStyle(color: searchInputHintColor, fontSize: 16),
+          prefixIcon: Icon(Icons.search, color: Colors.grey.shade600, size: 22),
+          filled: true,
+          fillColor: Colors.grey.shade100,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide.none,
           ),
-        ],
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide.none,
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: searchButtonColor, width: 1.5),
+          ),
+          contentPadding: const EdgeInsets.symmetric(
+            vertical: 14,
+            horizontal: 16,
+          ),
+          suffixIcon:
+              _searchController.text.isNotEmpty
+                  ? IconButton(
+                    icon: Icon(
+                      Icons.clear,
+                      color: Colors.grey.shade600,
+                      size: 20,
+                    ),
+                    onPressed: () => _searchController.clear(),
+                  )
+                  : null,
+        ),
+        style: const TextStyle(color: textDark, fontSize: 16),
       ),
     );
   }
 
-  Widget _buildDefaultContent() {
+  Widget _buildDefaultContent(
+    List<TechniqueItem> popular,
+    List<TechniqueItem> recent,
+    bool isLoadingMore,
+  ) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildHorizontalListSection("Popüler Teknikler", _popularTechniques),
+        if (isLoadingMore &&
+            (popular.isNotEmpty || recent.isNotEmpty)) // Refresh sırasında
+          const Padding(
+            padding: EdgeInsets.all(8.0),
+            child: Center(
+              child: SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.orange,
+                ),
+              ),
+            ),
+          ),
+        _buildHorizontalListSection("Popüler Teknikler", popular),
         const SizedBox(height: 30),
-        _buildHorizontalListSection("Son Eklenenler", _recentTechniques),
+        _buildHorizontalListSection("Son Eklenenler", recent),
       ],
     );
   }
 
   Widget _buildHorizontalListSection(String title, List<TechniqueItem> items) {
-    const double horizontalListHeight =
-        ContentCardWidget.cardHeight +
-        10; // ContentCardWidget'ın sabit yüksekliğini kullan
-
+    const double horizontalListHeight = ContentCardWidget.cardHeight + 10;
+    if (items.isEmpty) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(
+              color: sectionTitleColor,
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 16),
+          const SizedBox(
+            height: horizontalListHeight,
+            child: Center(
+              child: Text(
+                "Bu kategoride henüz teknik yok.",
+                style: TextStyle(color: Colors.grey),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -331,16 +353,10 @@ class _TechniquesPageState extends State<TechniquesPage> {
                   right: index == items.length - 1 ? 0 : 16.0,
                 ),
                 child: ContentCardWidget(
-                  coverImage: NetworkImage(item.coverImageUrl),
+                  coverImage: NetworkImage(
+                    item.coverImageUrl,
+                  ), // API'den gelen thumbnail
                   title: item.title,
-                  subtitlePrefix:
-                      (item.mentor != null && item.mentor!.isNotEmpty)
-                          ? "Mentor: "
-                          : null,
-                  subtitleText:
-                      (item.mentor != null && item.mentor!.isNotEmpty)
-                          ? item.mentor
-                          : null,
                   onTap: () => _navigateToLessonDetail(item),
                 ),
               );
@@ -351,8 +367,17 @@ class _TechniquesPageState extends State<TechniquesPage> {
     );
   }
 
-  Widget _buildSearchResults() {
-    if (_searchResults.isEmpty && _searchTerm.isNotEmpty) {
+  Widget _buildSearchResults(List<TechniqueItem> results) {
+    final courseProvider = Provider.of<CourseProvider>(context, listen: false);
+    if (courseProvider.isLoadingSearch && results.isEmpty) {
+      // Arama sırasında ve henüz sonuç yoksa
+      return const Center(
+        child: CircularProgressIndicator(color: Colors.orange),
+      );
+    }
+    if (results.isEmpty &&
+        _searchController.text.isNotEmpty &&
+        !courseProvider.isLoadingSearch) {
       return const Center(
         child: Padding(
           padding: EdgeInsets.symmetric(vertical: 40.0),
@@ -363,8 +388,8 @@ class _TechniquesPageState extends State<TechniquesPage> {
         ),
       );
     }
-    if (_searchResults.isEmpty && _searchTerm.isEmpty) {
-      // Arama yapılmıyorsa veya arama terimi boşsa hiçbir şey gösterme
+    if (results.isEmpty && _searchController.text.isEmpty) {
+      // Arama terimi silindiğinde boş ekran
       return const SizedBox.shrink();
     }
 
@@ -372,13 +397,9 @@ class _TechniquesPageState extends State<TechniquesPage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          // Arama sonuçları başlığı
-          padding: const EdgeInsets.only(
-            bottom: 16.0,
-            top: 8.0,
-          ), // Üstte biraz boşluk
+          padding: const EdgeInsets.only(bottom: 16.0, top: 8.0),
           child: Text(
-            "Arama Sonuçları (${_searchResults.length})",
+            "Arama Sonuçları (${results.length})",
             style: const TextStyle(
               color: sectionTitleColor,
               fontSize: 20,
@@ -389,25 +410,16 @@ class _TechniquesPageState extends State<TechniquesPage> {
         ListView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
-          itemCount: _searchResults.length,
+          itemCount: results.length,
           itemBuilder: (context, index) {
-            final technique = _searchResults[index];
+            final technique = results[index];
             return Padding(
               padding: const EdgeInsets.only(bottom: 12.0),
               child: Align(
-                // Kartları sola yaslamak için (eğer Column daha genişse)
                 alignment: Alignment.centerLeft,
                 child: ContentCardWidget(
                   coverImage: NetworkImage(technique.coverImageUrl),
                   title: technique.title,
-                  subtitlePrefix:
-                      (technique.mentor != null && technique.mentor!.isNotEmpty)
-                          ? "Mentor: "
-                          : null,
-                  subtitleText:
-                      (technique.mentor != null && technique.mentor!.isNotEmpty)
-                          ? technique.mentor
-                          : null,
                   onTap: () => _navigateToLessonDetail(technique),
                 ),
               ),

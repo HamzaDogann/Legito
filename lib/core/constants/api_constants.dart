@@ -27,4 +27,20 @@ class ApiConstants {
   static const String createTipEndpoint = "/Tip/Create";
   static const String updateTipEndpoint = "/Tip/Update";
   static const String deleteTipEndpoint = "/Tip/Delete";
+
+  //! Course (Teknik Dersler)
+  static const String getCourseIndexEndpoint =
+      "/Course/Index"; // GET (Kullanıcı için popüler ve son eklenenler)
+  static const String getCourseDetailEndpoint =
+      "/Course/Course"; // GET (Kullanıcı için, /{courseId} eklenecek)
+  static const String getUserCoursesEndpoint =
+      "/Course/GetUser"; // GET (Mentor için kendi dersleri)
+  static const String searchCoursesEndpoint =
+      "/Course/Search"; // GET (Kullanıcı için, ?query=... eklenecek)
+  static const String createCourseEndpoint =
+      "/Course/Create"; // POST (Mentor için)
+  static const String updateCourseEndpoint =
+      "/Course/Update"; // PUT (Mentor için, /{courseId} eklenecek)
+  static const String deleteCourseEndpoint =
+      "/Course/Delete"; // DELETE (Mentor için, /{courseId} eklenecek)
 }

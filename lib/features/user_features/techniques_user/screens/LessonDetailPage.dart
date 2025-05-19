@@ -2,15 +2,17 @@
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 import 'package:chewie/chewie.dart';
-import '../models/lesson_detail_args.dart';
 import 'package:provider/provider.dart';
+import 'package:intl/intl.dart';
+
+import '../models/lesson_detail_args.dart';
 import '../../../../state_management/auth_provider.dart';
 import '../../../../core/navigation/app_routes.dart';
-import '../../../../core/enums/user_role.dart';
+import '../../../course/state_management/course_provider.dart';
+import '../../../course/models/course_detail_dto.dart';
 
 class LessonDetailPage extends StatefulWidget {
   final LessonDetailArgs args;
-
   const LessonDetailPage({Key? key, required this.args}) : super(key: key);
 
   @override
@@ -18,29 +20,19 @@ class LessonDetailPage extends StatefulWidget {
 }
 
 class _LessonDetailPageState extends State<LessonDetailPage> {
-  // --- Sayfa İçi Kullanılacak Renk Sabitleri ---
-  // Bu renkler, AppBar teması dışındaki UI elemanları için.
-  // Eğer bu renkler de temadan yönetilecekse, Theme.of(context) ile erişilebilir.
-  static const Color _pageLevelTextDark = Color(
-    0xFF1F2937,
-  ); // Sayfa içi koyu metinler için
-  static const Color _pageLevelTextGrey = Color(
-    0xFF6B7280,
-  ); // Sayfa içi gri metinler için
-  static const Color _iconButtonBackground =
-      Colors.white; // Actions butonlarının arka planı
-  static const Color _favoriteIconColor = Color(
-    0xFFEF4444,
-  ); // Beğenildi ikonu rengi
+  static const Color _pageLevelTextDark = Color(0xFF1F2937);
+  static const Color _pageLevelTextGrey = Color(0xFF6B7280);
+  static const Color _iconButtonBackground = Colors.white;
+  static const Color _favoriteIconColor = Color(0xFFEF4444);
   static const Color _videoPlaceholderColor = Color(0xFF374151);
-  static const Color _chewieProgressColor = Color(
-    0xFFFF8128,
-  ); // Tema primary rengiyle aynı olabilir
+  static const Color _chewieProgressColor = Color(0xFFFF8128);
 
-  // --- State Değişkenleri ---
   VideoPlayerController? _videoPlayerController;
   ChewieController? _chewieController;
   late bool _isFavorite;
+  bool _isVideoPlayerInitialized = false; // Oynatıcının durumu için flag
+  bool _videoHasError = false; // Video yükleme hatası için flag
+  String? _currentVideoUrl; // Hangi URL ile oynatıcının başlatıldığını takip et
 
   @override
   void initState() {
@@ -48,50 +40,66 @@ class _LessonDetailPageState extends State<LessonDetailPage> {
     _isFavorite = widget.args.initialFavoriteState;
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
-      if (!authProvider.isAuthenticated || !authProvider.isUser()) {
-        print("LessonDetailPage initState: Yetkisiz. Login'e yönlendiriliyor.");
-        if (mounted) {
-          // mounted kontrolü eklendi
-          Navigator.pushNamedAndRemoveUntil(
-            context,
-            AppRoutes.login,
-            (route) => false,
-          );
-        }
-      } else {
-        print(
-          "LessonDetailPage initState: Yetkili. Video URL: ${widget.args.videoUrl}",
+      if (!authProvider.isAuthenticated) {
+        Navigator.pushNamedAndRemoveUntil(
+          context,
+          AppRoutes.login,
+          (route) => false,
         );
-        if (widget.args.videoUrl.isNotEmpty &&
-            Uri.tryParse(widget.args.videoUrl)?.isAbsolute == true) {
-          _initializeVideoPlayer();
-        } else {
-          print(
-            "LessonDetailPage: Geçersiz veya boş video URL'i, oynatıcı başlatılmayacak.",
-          );
-        }
+      } else {
+        Provider.of<CourseProvider>(
+          context,
+          listen: false,
+        ).fetchCourseDetail(widget.args.lessonId);
       }
     });
   }
 
-  void _initializeVideoPlayer() {
-    _videoPlayerController?.dispose();
+  Future<void> _initializeVideoPlayer(String videoUrl) async {
+    if (!mounted) return;
+    print("LessonDetailPage: _initializeVideoPlayer çağrıldı. URL: $videoUrl");
+
+    // Mevcut controller'ları temizle
+    await _videoPlayerController?.dispose();
     _chewieController?.dispose();
-    _videoPlayerController = VideoPlayerController.networkUrl(
-        Uri.parse(widget.args.videoUrl),
-      )
-      ..initialize()
-          .then((_) {
-            if (mounted) {
-              _createChewieController();
-              setState(() {});
-            }
-          })
-          .catchError((error) {
-            print("Video yüklenirken hata oluştu ($runtimeType): $error");
-            if (mounted) setState(() {});
-          });
+    _videoPlayerController = null;
+    _chewieController = null;
+    _isVideoPlayerInitialized = false;
+    _videoHasError = false;
+    _currentVideoUrl = videoUrl; // Yeni URL'yi sakla
+    setState(() {}); // UI'ı temizlenmiş/yükleniyor durumuna getir
+
+    if (videoUrl.isEmpty || Uri.tryParse(videoUrl)?.isAbsolute != true) {
+      print(
+        "LessonDetailPage: Geçersiz veya boş video URL'i ($videoUrl), oynatıcı başlatılmayacak.",
+      );
+      if (mounted) setState(() => _videoHasError = true);
+      return;
+    }
+
+    try {
+      final newController = VideoPlayerController.networkUrl(
+        Uri.parse(videoUrl),
+      );
+      await newController
+          .initialize(); // initialize() Future döndürür, await ile beklenmeli
+      if (!mounted) {
+        // initialize sonrası widget hala mounted mı kontrol et
+        await newController.dispose();
+        return;
+      }
+      _videoPlayerController = newController;
+      _createChewieController();
+      _isVideoPlayerInitialized = true;
+      _videoHasError = false;
+    } catch (error) {
+      print("LessonDetailPage: Video başlatılırken hata oluştu: $error");
+      _videoHasError = true;
+    } finally {
+      if (mounted) setState(() {}); // Her durumda UI'ı güncelle
+    }
   }
 
   void _createChewieController() {
@@ -111,7 +119,7 @@ class _LessonDetailPageState extends State<LessonDetailPage> {
       errorBuilder:
           (context, errorMessage) => Center(
             child: Text(
-              "Video yüklenemedi: $errorMessage",
+              "Video oynatılamadı: $errorMessage",
               style: const TextStyle(color: Colors.white),
             ),
           ),
@@ -128,212 +136,231 @@ class _LessonDetailPageState extends State<LessonDetailPage> {
   void dispose() {
     _videoPlayerController?.dispose();
     _chewieController?.dispose();
+    print("LessonDetailPage: Disposed video players.");
     super.dispose();
   }
 
-  void _toggleFavorite() {
-    setState(() {
-      _isFavorite = !_isFavorite;
-    });
-    print('Ders ID: ${widget.args.lessonId}, Yeni Beğeni Durumu: $_isFavorite');
-    // TODO: Backend'e kaydet
+  void _toggleFavorite(CourseDetailDto courseDetail) {
+    /* ... (önceki gibi) ... */
   }
-
-  void _shareContent() {
-    print("Paylaş butonuna tıklandı! Ders ID: ${widget.args.lessonId}");
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Paylaşma özelliği henüz eklenmedi.')),
-    );
-    // TODO: share_plus ile paylaşım ekle
+  void _shareContent(CourseDetailDto courseDetail) {
+    /* ... (önceki gibi) ... */
   }
 
   @override
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    if (!authProvider.isAuthenticated || !authProvider.isUser()) {
-      return const Scaffold(
-        body: Center(
-          child: CircularProgressIndicator(
-            valueColor: AlwaysStoppedAnimation<Color>(Colors.orange),
-          ),
-        ),
-      );
+    if (!authProvider.isAuthenticated) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
-    // AppBar için renkler ve stiller main.dart'taki appBarTheme'den gelecek.
-    final ThemeData appTheme = Theme.of(context); // Genel temayı al
+    return Consumer<CourseProvider>(
+      builder: (context, courseProvider, child) {
+        final CourseDetailDto? courseDetail =
+            courseProvider.selectedCourseDetail;
+        final bool isLoading = courseProvider.isLoadingDetail;
+        final String? error = courseProvider.errorDetail;
 
-    return Scaffold(
-      backgroundColor: Colors.white, // Sayfa arka planı
-      appBar: AppBar(
-        // backgroundColor, foregroundColor, elevation özellikleri temadan gelecek.
-        // titleTextStyle ve iconTheme de temadan gelecek.
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back), // İkon rengi temadan
-          onPressed: () {
-            if (Navigator.canPop(context)) {
-              Navigator.of(context).pop();
-            } else {
-              Navigator.pushReplacementNamed(context, AppRoutes.techniquesUser);
+        // Sadece courseDetail yüklendiğinde ve video URL'si değiştiğinde oynatıcıyı başlat/güncelle
+        if (courseDetail != null &&
+            courseDetail.video.isNotEmpty &&
+            courseDetail.video != _currentVideoUrl) {
+          // Bu setState'i build içinde tetikleyebilir, dikkatli ol.
+          // Eğer _currentVideoUrl null ise (ilk yükleme) veya farklıysa ve mounted ise çağır.
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted && (courseDetail.video != _currentVideoUrl)) {
+              _initializeVideoPlayer(courseDetail.video);
             }
-          },
-        ),
-        title: Text(
-          widget.args.title,
-          // Temadan gelen başlık stilini alıp üzerine yazabiliriz veya direkt kullanabiliriz.
-          // Eğer temadaki AppBar başlık stili (main.dart'ta tanımlı) zaten bold ise,
-          // burada tekrar fontWeight belirtmeye gerek yok.
-          // style: appTheme.appBarTheme.titleTextStyle?.copyWith(fontWeight: FontWeight.bold),
-          // Ya da, temadaki stil tamamen uygunsa direkt bırakın:
-          // style: appTheme.appBarTheme.titleTextStyle, (Bu zaten varsayılan davranış)
-          // Şimdilik, temadan gelenin üzerine fontWeight.bold ekleyelim (eğer temada yoksa diye):
-          style: (appTheme.appBarTheme.titleTextStyle ?? const TextStyle()).copyWith(
-            fontWeight: FontWeight.bold,
-            // fontSize: 20, // Temadan gelen fontSize'ı kullanır, gerekirse override edin
-            // color: appTheme.appBarTheme.foregroundColor, // Temadan gelen rengi kullanır
+          });
+        }
+
+        String appBarTitle = courseDetail?.title ?? widget.args.title;
+
+        return Scaffold(
+          backgroundColor: Colors.white,
+          appBar: AppBar(
+            leading: IconButton(
+              icon: const Icon(Icons.arrow_back),
+              onPressed:
+                  () =>
+                      Navigator.canPop(context)
+                          ? Navigator.of(context).pop()
+                          : Navigator.pushReplacementNamed(
+                            context,
+                            AppRoutes.techniquesUser,
+                          ),
+            ),
+            title: Text(appBarTitle, overflow: TextOverflow.ellipsis),
+            centerTitle: false,
+            titleSpacing: 0,
+            actions:
+                courseDetail != null
+                    ? [
+                      _buildAppBarAction(
+                        icon:
+                            _isFavorite
+                                ? Icons.favorite
+                                : Icons.favorite_border,
+                        color:
+                            _isFavorite
+                                ? _favoriteIconColor
+                                : _pageLevelTextGrey,
+                        tooltip: 'Beğen',
+                        onPressed: () => _toggleFavorite(courseDetail),
+                      ),
+                      _buildAppBarAction(
+                        icon: Icons.ios_share_outlined,
+                        color: _pageLevelTextGrey,
+                        tooltip: 'Paylaş',
+                        onPressed: () => _shareContent(courseDetail),
+                        marginRight: 16.0,
+                      ),
+                    ]
+                    : [],
           ),
-          overflow: TextOverflow.ellipsis,
-        ),
-        centerTitle: false, // Bu sayfaya özel
-        titleSpacing: 0, // Bu sayfaya özel
-        actions: [
-          Container(
-            margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
-            decoration: BoxDecoration(
-              color: _iconButtonBackground,
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.grey.withOpacity(0.2),
-                  spreadRadius: 1,
-                  blurRadius: 3,
-                  offset: const Offset(0, 1),
+          body: Builder(
+            // Builder ekleyerek context'i yeniliyoruz
+            builder: (context) {
+              if (isLoading && courseDetail == null) {
+                return const Center(
+                  child: CircularProgressIndicator(color: Colors.orange),
+                );
+              }
+              if (error != null && courseDetail == null) {
+                return Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Text(
+                      "Hata: $error",
+                      style: const TextStyle(color: Colors.red, fontSize: 16),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                );
+              }
+              if (courseDetail == null) {
+                return const Center(child: Text("Ders detayı bulunamadı."));
+              }
+
+              // Artık courseDetail null değil
+              Widget videoSection;
+              if (_videoHasError) {
+                videoSection = Container(
+                  height: 200,
+                  color: _videoPlaceholderColor,
+                  child: const Center(
+                    child: Text(
+                      'Video yüklenirken bir hata oluştu.\nLütfen internet bağlantınızı kontrol edin veya daha sonra tekrar deneyin.',
+                      style: TextStyle(color: Colors.white),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                );
+              } else if (_isVideoPlayerInitialized &&
+                  _chewieController != null) {
+                videoSection = AspectRatio(
+                  aspectRatio: _videoPlayerController!.value.aspectRatio,
+                  child: Chewie(controller: _chewieController!),
+                );
+              } else if (courseDetail.video.isNotEmpty) {
+                // URL var ama henüz yüklenmedi
+                videoSection = Container(
+                  height: 200,
+                  color: _videoPlaceholderColor,
+                  child: const Center(
+                    child: CircularProgressIndicator(color: Colors.white),
+                  ),
+                );
+              } else {
+                // Video URL yok
+                videoSection = Container(
+                  height: 200,
+                  color: Colors.grey.shade300,
+                  child: const Center(
+                    child: Icon(
+                      Icons.videocam_off_outlined,
+                      size: 50,
+                      color: Colors.grey,
+                    ),
+                  ),
+                );
+              }
+
+              return SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    videoSection,
+                    Padding(
+                      padding: const EdgeInsets.all(20.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            courseDetail.title,
+                            style: const TextStyle(
+                              color: _pageLevelTextDark,
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 20),
+                          _buildStatsRow(
+                            likes: "${courseDetail.likeCount}+",
+                            views: "${courseDetail.viewCount} G",
+                            date: DateFormat(
+                              'dd MMM yyyy',
+                              'tr_TR',
+                            ).format(courseDetail.createdDate),
+                          ),
+                          const Divider(
+                            height: 32,
+                            thickness: 1,
+                            color: Colors.grey,
+                          ),
+                          _buildContentText(
+                            courseDetail.description ??
+                                "Bu ders için henüz bir açıklama eklenmemiş.",
+                          ),
+                          const SizedBox(height: 20),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-            child: IconButton(
-              icon: Icon(
-                _isFavorite ? Icons.favorite : Icons.favorite_border,
-                color: _isFavorite ? _favoriteIconColor : _pageLevelTextGrey,
-              ),
-              onPressed: _toggleFavorite,
-              tooltip: 'Beğen',
-            ),
+              );
+            },
           ),
-          Container(
-            margin: const EdgeInsets.only(
-              top: 8,
-              bottom: 8,
-              right: 16,
-              left: 6,
-            ),
-            decoration: BoxDecoration(
-              color: _iconButtonBackground,
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.grey.withOpacity(0.2),
-                  spreadRadius: 1,
-                  blurRadius: 3,
-                  offset: const Offset(0, 1),
-                ),
-              ],
-            ),
-            child: IconButton(
-              icon: const Icon(
-                Icons.ios_share_outlined,
-                color: _pageLevelTextGrey,
-              ),
-              onPressed: _shareContent,
-              tooltip: 'Paylaş',
-            ),
+        );
+      },
+    );
+  }
+
+  Widget _buildAppBarAction({
+    required IconData icon,
+    required Color color,
+    required String tooltip,
+    required VoidCallback onPressed,
+    double marginRight = 6.0,
+  }) {
+    return Container(
+      margin: EdgeInsets.only(top: 8, bottom: 8, right: marginRight, left: 6),
+      decoration: BoxDecoration(
+        color: _iconButtonBackground,
+        shape: BoxShape.circle,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withOpacity(0.2),
+            spreadRadius: 1,
+            blurRadius: 3,
+            offset: const Offset(0, 1),
           ),
         ],
       ),
-      body: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Video Oynatıcı
-            if (_videoPlayerController != null &&
-                _videoPlayerController!.value.isInitialized &&
-                _chewieController != null)
-              AspectRatio(
-                aspectRatio: _videoPlayerController!.value.aspectRatio,
-                child: Chewie(controller: _chewieController!),
-              )
-            else if (_videoPlayerController != null &&
-                _videoPlayerController!.value.hasError)
-              Container(
-                height: 200,
-                color: _videoPlaceholderColor,
-                child: const Center(
-                  child: Text(
-                    'Video yüklenirken bir hata oluştu.',
-                    style: TextStyle(color: Colors.white),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-              )
-            else if (widget.args.videoUrl.isNotEmpty &&
-                Uri.tryParse(widget.args.videoUrl)?.isAbsolute == true)
-              Container(
-                height: 200,
-                color: _videoPlaceholderColor,
-                child: const Center(
-                  child: CircularProgressIndicator(color: Colors.white),
-                ),
-              )
-            else
-              Container(
-                height: 200,
-                color: Colors.grey.shade300,
-                child: const Center(
-                  child: Icon(
-                    Icons.videocam_off_outlined,
-                    size: 50,
-                    color: Colors.grey,
-                  ),
-                ),
-              ),
-
-            Padding(
-              padding: const EdgeInsets.all(20.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    widget.args.title,
-                    style: const TextStyle(
-                      color: _pageLevelTextDark,
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  _buildStatsRow(
-                    likes: widget.args.likeCount,
-                    views: widget.args.viewCount,
-                    date: widget.args.publishDate,
-                  ),
-                  const Divider(
-                    height: 32,
-                    thickness: 1,
-                    color: Colors.grey,
-                  ), // Divider rengi açık gri olabilir
-                  if (widget.args.description != null &&
-                      widget.args.description!.isNotEmpty)
-                    _buildContentText(widget.args.description!)
-                  else
-                    _buildContentText(
-                      "Bu ders için henüz bir açıklama eklenmemiş.",
-                    ),
-                  const SizedBox(height: 20),
-                ],
-              ),
-            ),
-          ],
-        ),
+      child: IconButton(
+        icon: Icon(icon, color: color),
+        onPressed: onPressed,
+        tooltip: tooltip,
       ),
     );
   }

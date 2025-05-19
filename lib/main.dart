@@ -9,8 +9,9 @@ import 'core/navigation/app_routes.dart';
 import 'core/navigation/route_generator.dart';
 import 'state_management/auth_provider.dart';
 import 'features/user_features/library/state_management/library_provider.dart';
-// YENİ IMPORT (TipProvider)
 import 'features/mentor_features/tips_mentor/state_management/tip_provider.dart';
+// YENİ IMPORT (CourseProvider)
+import 'features/course/state_management/course_provider.dart'; // Doğru yolu kontrol edin
 
 class MyHttpOverrides extends HttpOverrides {
   @override
@@ -35,24 +36,35 @@ void main() {
               (context) => LibraryProvider(
                 Provider.of<AuthProvider>(context, listen: false),
               ),
-          update: (context, auth, previous) => LibraryProvider(auth),
+          update:
+              (context, auth, previous) =>
+                  LibraryProvider(auth), // Basit update
         ),
-        // YENİ TipProvider EKLEMESİ
         ChangeNotifierProxyProvider<AuthProvider, TipProvider>(
           create:
               (context) => TipProvider(
                 Provider.of<AuthProvider>(context, listen: false),
               ),
-          update: (context, auth, previous) => TipProvider(auth),
-          // previous parametresi (TipProvider?) null olabilir.
-          // Eğer TipProvider'ın state'ini korumak isterseniz:
-          // update: (context, auth, previousTipProvider) {
-          //   final tipProvider = previousTipProvider ?? TipProvider(auth);
-          //   // Eğer auth değiştiyse ve TipProvider'ın bazı işlemleri yeniden yapması gerekiyorsa:
-          //   // tipProvider.updateAuthProvider(auth); // TipProvider'a böyle bir metot ekleyerek
-          //   return tipProvider;
-          // },
+          update:
+              (context, auth, previous) => TipProvider(auth), // Basit update
         ),
+        // --- YENİ CourseProvider EKLEMESİ ---
+        ChangeNotifierProxyProvider<AuthProvider, CourseProvider>(
+          create:
+              (context) => CourseProvider(
+                Provider.of<AuthProvider>(context, listen: false),
+              ),
+          update: (context, auth, previousCourseProvider) {
+            // AuthProvider değiştiğinde CourseProvider'ı yeni auth ile güncelle.
+            // Eğer CourseProvider'ın kendi state'ini koruması ve sadece auth referansını
+            // güncellemesi gerekiyorsa, CourseProvider'a bir updateAuth metodu eklenebilir.
+            // Şimdilik, her AuthProvider değişikliğinde yeni bir CourseProvider oluşturuyoruz.
+            // Bu, CourseProvider'ın constructor'ında auth durumuna göre ilk yüklemeleri
+            // yapması için uygundur.
+            return CourseProvider(auth);
+          },
+        ),
+        // --- BİTİŞ: CourseProvider EKLEMESİ ---
       ],
       child: const MainApp(),
     ),

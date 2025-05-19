@@ -9,8 +9,9 @@
     <application
         android:label="legito"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
-        
+        android:icon="@mipmap/ic_launcher"
+        android:usesCleartextTraffic="true">   <!-- ⬅️  BURAYA EKLENDİ -->
+
         <activity
             android:name=".MainActivity"
             android:exported="true"

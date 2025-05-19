@@ -1,18 +1,16 @@
+// lib/features/mentor_features/techniques_lesson/screens/TechniquesLessonPage.dart
+import 'dart:io';
 import 'package:flutter/material.dart';
-import 'dart:io'; // File işlemleri için
 import 'package:image_picker/image_picker.dart';
+import 'package:provider/provider.dart';
+import 'package:intl/intl.dart';
 
-import '../../../../shared_widgets/cover_card_widget.dart'; // Resim seçici
-// CoverCardWidget importu
+import '../../../../shared_widgets/cover_card_widget.dart';
+import '../../../../core/navigation/app_routes.dart';
+import '../../../../state_management/auth_provider.dart';
+import '../../../course/state_management/course_provider.dart';
+import '../../../course/models/course_item_dto.dart';
 
-// --- YENİ ORTAK SABİTLER ---
-const double kUnifiedListItemCoverSize = 80.0;
-const BorderRadius kUnifiedListItemBorderRadius = BorderRadius.all(
-  Radius.circular(12.0),
-);
-// --- ---
-
-// Teknik ders öğesini temsil edecek model
 class TechniqueLessonItem {
   String id;
   Gradient gradient;
@@ -36,14 +34,12 @@ class TechniqueLessonItem {
 }
 
 class TechniquesLessonPage extends StatefulWidget {
-  const TechniquesLessonPage({super.key});
-
+  const TechniquesLessonPage({Key? key}) : super(key: key);
   @override
   State<TechniquesLessonPage> createState() => _TechniquesLessonPageState();
 }
 
 class _TechniquesLessonPageState extends State<TechniquesLessonPage> {
-  // Renkler ve Sabitler
   static const Color appBarBackground = Color(0xFFF4F6F9);
   static const Color textDark = Color(0xFF1F2937);
   static const Color searchButtonColor = Color(0xFFFF8128);
@@ -56,237 +52,299 @@ class _TechniquesLessonPageState extends State<TechniquesLessonPage> {
   static const Color saveButtonColor = Color(0xFFFF8128);
   static const Color cancelButtonColor = Color.fromARGB(255, 27, 27, 27);
   static const Color coverEditIconBg = Colors.white;
-
-  static const Gradient gradientRed = LinearGradient(
-    colors: [Color(0xFFFA8072), Color(0xFFEF4444)],
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
+  static const double kUnifiedListItemCoverSize = 80.0;
+  static const BorderRadius kUnifiedListItemBorderRadius = BorderRadius.all(
+    Radius.circular(12.0),
   );
-  static const Gradient gradientPurple = LinearGradient(
-    colors: [Color(0xFF8B5CF6), Color(0xFF7C3AED)],
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
-  );
-  static const Gradient gradientGreen = LinearGradient(
-    colors: [Color(0xFF34D399), Color(0xFF10B981)],
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
-  );
-  static const Gradient gradientDarkGrey = LinearGradient(
-    colors: [Color(0xFF4B5563), Color(0xFF374151)],
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
-  );
-  final List<Gradient> _availableGradients = [
-    gradientRed,
-    gradientPurple,
-    gradientGreen,
-    gradientDarkGrey,
-  ];
-
-  // ESKİ SABİTLER KALDIRILDI veya YORUMA ALINDI
-  // static const double kLessonItemCoverSize = 85.0;
-  // static const BorderRadius kLessonItemBorderRadius =
-  //     BorderRadius.all(Radius.circular(16.0));
-
-  // Modal için olanlar farklı kalabilir, isteğe bağlı olarak birleştirilebilir.
   static const double kModalCoverSize = 120.0;
   static const BorderRadius kModalCoverBorderRadius = BorderRadius.all(
     Radius.circular(12.0),
   );
   static const String kDefaultCoverIconAsset = 'assets/images/BookIcon.png';
+  final List<Gradient> _availableGradients = const [
+    LinearGradient(
+      colors: [Color(0xFFFA8072), Color(0xFFEF4444)],
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+    ),
+    LinearGradient(
+      colors: [Color(0xFF8B5CF6), Color(0xFF7C3AED)],
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+    ),
+    LinearGradient(
+      colors: [Color(0xFF34D399), Color(0xFF10B981)],
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+    ),
+    LinearGradient(
+      colors: [Color(0xFF4B5563), Color(0xFF374151)],
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+    ),
+  ];
 
-  List<TechniqueLessonItem> _lessons = [];
-  List<TechniqueLessonItem> _filteredLessons = [];
   String _searchTerm = '';
-
-  TechniqueLessonItem? _selectedLesson;
+  TechniqueLessonItem? _selectedLessonUI;
   bool _isSelectionMode = false;
-
   final TextEditingController _searchController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
   final TextEditingController _videoUrlController = TextEditingController();
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _descriptionController = TextEditingController();
-  File? _selectedCoverImageFile;
-
+  File? _modalSelectedCoverImageFile;
+  bool _modalRemoveCoverImage = false;
   final ImagePicker _picker = ImagePicker();
 
   @override
   void initState() {
     super.initState();
-    _loadInitialLessons();
-    _filteredLessons = List.from(_lessons);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      if (!authProvider.isAuthenticated || !authProvider.isMentor()) {
+        if (mounted)
+          Navigator.pushNamedAndRemoveUntil(
+            context,
+            AppRoutes.login,
+            (route) => false,
+          );
+      } else {
+        Provider.of<CourseProvider>(
+          context,
+          listen: false,
+        ).fetchMentorCourses();
+      }
+    });
     _searchController.addListener(() {
-      setState(() {
-        _searchTerm = _searchController.text;
-        _filterLessons();
-      });
+      if (mounted) setState(() => _searchTerm = _searchController.text);
     });
   }
 
-  Gradient _getRandomGradient() {
-    return _availableGradients[DateTime.now().millisecondsSinceEpoch %
-        _availableGradients.length];
+  TechniqueLessonItem _mapCourseDtoToTechniqueLessonItem(
+    CourseItemDto dto, {
+    String? descriptionFromDetail,
+    String? videoUrlFromDetail,
+  }) {
+    return TechniqueLessonItem(
+      id: dto.id,
+      gradient:
+          _availableGradients[dto.id.hashCode % _availableGradients.length],
+      title: dto.title,
+      date: DateFormat('dd MMM yyyy', 'tr_TR').format(dto.createdDate),
+      views: "${dto.viewCount} G",
+      videoUrl: videoUrlFromDetail ?? dto.video, // Detaydan gelen öncelikli
+      description: descriptionFromDetail, // Detaydan gelen description
+      coverImagePath: dto.thumbnail,
+    );
   }
 
-  void _loadInitialLessons() {
-    _lessons = [
-      TechniqueLessonItem(
-        id: 'l1',
-        gradient: gradientRed,
-        title: "Etkili Okuma Yöntemi ile Anlama Kapasitenizi Artırın",
-        date: "11 Mayıs 2025",
-        views: "110B",
-        videoUrl: "https://example.com/video1.mp4",
-        description: "Bu derste etkili okuma tekniklerini öğreneceksiniz.",
-      ),
-      TechniqueLessonItem(
-        id: 'l2',
-        gradient: gradientPurple,
-        title: "Zihin Haritalama Teknikleri ve Uygulamaları",
-        date: "12 Mayıs 2025",
-        views: "230B",
-        videoUrl: "https://example.com/video2.mp4",
-        description: "Zihin haritaları ile not alma ve öğrenme.",
-      ),
-      TechniqueLessonItem(
-        id: 'l3',
-        gradient: gradientGreen,
-        title: "Hızlı Not Alma Stratejileri",
-        date: "13 Mayıs 2025",
-        views: "85B",
-      ),
-    ];
-  }
+  Gradient _getRandomGradient(String idBasedSeed) =>
+      _availableGradients[idBasedSeed.hashCode % _availableGradients.length];
 
-  void _filterLessons() {
-    if (_searchTerm.isEmpty) {
-      _filteredLessons = List.from(_lessons);
-    } else {
-      _filteredLessons =
-          _lessons
-              .where(
-                (lesson) => lesson.title.toLowerCase().contains(
-                  _searchTerm.toLowerCase(),
-                ),
-              )
-              .toList();
+  Future<void> _onLessonLongPress(TechniqueLessonItem lessonFromList) async {
+    final courseProvider = Provider.of<CourseProvider>(context, listen: false);
+
+    print(
+      "TechniquesLessonPage: Long press on ${lessonFromList.id}. Fetching details for modal...",
+    );
+    // Detayları çek, _selectedCourseDetail provider'da güncellenecek
+    await courseProvider.fetchCourseDetail(lessonFromList.id);
+
+    if (mounted) {
+      // Provider'daki güncel detayı al
+      final detailedCourse = courseProvider.selectedCourseDetail;
+      TechniqueLessonItem lessonForSelection = lessonFromList; // Fallback
+
+      if (detailedCourse != null && detailedCourse.id == lessonFromList.id) {
+        // Güncel detaylarla yeni bir UI objesi oluştur (veya eskisini güncelle)
+        lessonForSelection = TechniqueLessonItem(
+          id: detailedCourse.id,
+          gradient: lessonFromList.gradient, // Gradient'i listeden koru
+          title: detailedCourse.title,
+          date: DateFormat(
+            'dd MMM yyyy',
+            'tr_TR',
+          ).format(detailedCourse.createdDate),
+          views: "${detailedCourse.viewCount} G",
+          videoUrl: detailedCourse.video,
+          description: detailedCourse.description,
+          coverImagePath:
+              lessonFromList.coverImagePath, // Thumbnail listeden koru
+        );
+        print(
+          "TechniquesLessonPage: Details fetched. Description: '${lessonForSelection.description}'",
+        );
+      } else {
+        print(
+          "TechniquesLessonPage: Could not fetch/match details for ${lessonFromList.id}. Using list data. Error: ${courseProvider.errorDetail}",
+        );
+        // Hata varsa kullanıcıya gösterilebilir (opsiyonel)
+        if (courseProvider.errorDetail != null &&
+            courseProvider.errorDetail!.isNotEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                "Ders detayı yüklenemedi: ${courseProvider.errorDetail}",
+              ),
+            ),
+          );
+        }
+      }
+      setState(() {
+        _selectedLessonUI = lessonForSelection;
+        _isSelectionMode = true;
+      });
     }
   }
 
-  void _onLessonLongPress(TechniqueLessonItem lesson) {
-    setState(() {
-      _selectedLesson = lesson;
-      _isSelectionMode = true;
-    });
-  }
-
-  void _exitSelectionMode() {
-    setState(() {
-      _selectedLesson = null;
-      _isSelectionMode = false;
-    });
-  }
+  void _exitSelectionMode() => setState(() {
+    _selectedLessonUI = null;
+    _isSelectionMode = false;
+  });
 
   void _deleteSelectedLesson() {
-    if (_selectedLesson != null) {
-      showDialog(
-        context: context,
-        builder:
-            (BuildContext context) => AlertDialog(
-              title: Text("Dersi Sil"),
-              content: Text(
-                "'${_selectedLesson!.title}' dersi silinecek. Emin misiniz?",
+    if (_selectedLessonUI == null) return;
+    showDialog(
+      context: context,
+      builder:
+          (BuildContext dCtx) => AlertDialog(
+            title: const Text("Dersi Sil"),
+            content: Text("'${_selectedLessonUI!.title}' silinecek?"),
+            actions: [
+              TextButton(
+                child: const Text("İptal"),
+                onPressed: () => Navigator.of(dCtx).pop(),
               ),
-              actions: <Widget>[
-                TextButton(
-                  child: Text("İptal"),
-                  onPressed: () => Navigator.of(context).pop(),
-                ),
-                TextButton(
-                  child: Text("Sil", style: TextStyle(color: Colors.red)),
-                  onPressed: () {
-                    Navigator.of(context).pop();
-                    setState(() {
-                      _lessons.removeWhere((l) => l.id == _selectedLesson!.id);
-                      _filterLessons();
+              TextButton(
+                child: const Text("Sil", style: TextStyle(color: Colors.red)),
+                onPressed: () async {
+                  Navigator.of(dCtx).pop();
+                  final cp = Provider.of<CourseProvider>(
+                    context,
+                    listen: false,
+                  );
+                  final success = await cp.deleteCourse(_selectedLessonUI!.id);
+                  if (mounted) {
+                    if (success) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text("Ders silindi.")),
+                      );
                       _exitSelectionMode();
-                    });
-                    ScaffoldMessenger.of(
-                      context,
-                    ).showSnackBar(SnackBar(content: Text("Ders silindi.")));
-                  },
-                ),
-              ],
-            ),
-      );
-    }
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            "Hata: ${cp.errorSubmit ?? 'Bilinmeyen bir sorun.'}",
+                          ),
+                        ),
+                      );
+                    }
+                  }
+                },
+              ),
+            ],
+          ),
+    );
   }
 
-  Future<void> _pickImage(ImageSource source, StateSetter modalSetState) async {
+  Future<void> _pickImageForModal(
+    ImageSource source,
+    StateSetter modalSetState,
+  ) async {
     try {
       final XFile? pickedFile = await _picker.pickImage(
         source: source,
         imageQuality: 70,
+        maxWidth: 1024,
+        maxHeight: 768,
       );
-      if (pickedFile != null) {
+      if (pickedFile != null)
         modalSetState(() {
-          _selectedCoverImageFile = File(pickedFile.path);
+          _modalSelectedCoverImageFile = File(pickedFile.path);
+          _modalRemoveCoverImage = false;
         });
-      }
     } catch (e) {
-      print("Resim seçme hatası: $e");
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text("Resim seçilemedi.")));
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text("Resim seçilemedi.")));
     }
   }
 
-  void _removeCoverImage(StateSetter modalSetState) {
-    modalSetState(() {
-      _selectedCoverImageFile = null;
-    });
+  void _removeCoverImageInModal(StateSetter modalSetState) => modalSetState(() {
+    _modalSelectedCoverImageFile = null;
+    _modalRemoveCoverImage = true;
+  });
+  void _showImageSourceActionSheetForModal(
+    BuildContext modalCtx,
+    StateSetter modalSetSt,
+  ) {
+    showModalBottomSheet(
+      context: modalCtx,
+      builder: (BuildContext bCtx) {
+        return SafeArea(
+          child: Wrap(
+            children: <Widget>[
+              ListTile(
+                leading: const Icon(Icons.photo_library),
+                title: const Text('Galeriden Seç'),
+                onTap: () {
+                  _pickImageForModal(ImageSource.gallery, modalSetSt);
+                  Navigator.of(bCtx).pop();
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.photo_camera),
+                title: const Text('Kameradan Çek'),
+                onTap: () {
+                  _pickImageForModal(ImageSource.camera, modalSetSt);
+                  Navigator.of(bCtx).pop();
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   void _openAddEditLessonModal({TechniqueLessonItem? lessonToEdit}) {
     bool isEditing = lessonToEdit != null;
-    _selectedCoverImageFile = null;
+    _modalSelectedCoverImageFile = null;
+    _modalRemoveCoverImage = false;
 
-    if (isEditing) {
-      _videoUrlController.text = lessonToEdit!.videoUrl ?? '';
+    if (isEditing && lessonToEdit != null) {
+      _videoUrlController.text = lessonToEdit.videoUrl ?? '';
       _titleController.text = lessonToEdit.title;
-      _descriptionController.text = lessonToEdit.description ?? '';
+      _descriptionController.text =
+          lessonToEdit.description ?? ''; // _onLessonLongPress'te güncellendi
+      print(
+        "Modal açılıyor (Düzenleme): Title='${lessonToEdit.title}', Description='${lessonToEdit.description}', Video='${lessonToEdit.videoUrl}'",
+      );
     } else {
       _videoUrlController.clear();
       _titleController.clear();
       _descriptionController.clear();
+      print("Modal açılıyor (Yeni Ekleme)");
     }
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.white,
-      shape: RoundedRectangleBorder(
+      shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20.0)),
       ),
       builder: (BuildContext modalContext) {
         return StatefulBuilder(
-          builder: (BuildContext context, StateSetter modalSetState) {
-            File? imageFileToShowInModal;
-            String? imagePathFromLesson;
-            bool showDefaultCoverInModal = true;
-
-            if (_selectedCoverImageFile != null &&
-                _selectedCoverImageFile!.existsSync()) {
-              imageFileToShowInModal = _selectedCoverImageFile;
-              showDefaultCoverInModal = false;
-            } else if (isEditing &&
-                lessonToEdit?.coverImagePath != null &&
-                File(lessonToEdit!.coverImagePath!).existsSync()) {
-              imageFileToShowInModal = File(lessonToEdit!.coverImagePath!);
-              showDefaultCoverInModal = false;
-            }
+          builder: (BuildContext ssbContext, StateSetter modalSetState) {
+            String? currentCoverNetworkPath =
+                (isEditing &&
+                        lessonToEdit?.coverImagePath != null &&
+                        !_modalRemoveCoverImage)
+                    ? lessonToEdit!.coverImagePath
+                    : null;
+            File? coverFileToShow = _modalSelectedCoverImageFile;
 
             return Padding(
               padding: EdgeInsets.only(
@@ -301,7 +359,7 @@ class _TechniquesLessonPageState extends State<TechniquesLessonPage> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
+                    children: [
                       Center(
                         child: Container(
                           width: 40,
@@ -312,49 +370,61 @@ class _TechniquesLessonPageState extends State<TechniquesLessonPage> {
                           ),
                         ),
                       ),
-                      SizedBox(height: 25),
+                      const SizedBox(height: 25),
                       Center(
                         child: Stack(
                           alignment: Alignment.bottomRight,
                           children: [
                             GestureDetector(
                               onTap:
-                                  () => _showImageSourceActionSheet(
+                                  () => _showImageSourceActionSheetForModal(
                                     modalContext,
                                     modalSetState,
                                   ),
                               child: CoverCardWidget(
                                 size: kModalCoverSize,
                                 borderRadius: kModalCoverBorderRadius,
-                                imageFile: imageFileToShowInModal,
+                                imageFile: coverFileToShow,
+                                imageNetworkPath:
+                                    coverFileToShow == null
+                                        ? currentCoverNetworkPath
+                                        : null,
                                 gradient:
-                                    showDefaultCoverInModal
-                                        ? gradientRed
+                                    (coverFileToShow == null &&
+                                            currentCoverNetworkPath == null)
+                                        ? _getRandomGradient("modal_default")
                                         : null,
                                 imageAssetPath:
-                                    showDefaultCoverInModal
+                                    (coverFileToShow == null &&
+                                            currentCoverNetworkPath == null)
                                         ? kDefaultCoverIconAsset
                                         : null,
                                 iconColor:
-                                    showDefaultCoverInModal
+                                    (coverFileToShow == null &&
+                                            currentCoverNetworkPath == null)
                                         ? Colors.white
                                         : null,
                                 iconOrImageSize: kModalCoverSize * 0.6,
                               ),
                             ),
-                            if (!showDefaultCoverInModal)
+                            if ((coverFileToShow != null ||
+                                    currentCoverNetworkPath != null) &&
+                                isEditing)
                               Positioned(
                                 right: -8,
                                 top: -8,
                                 child: InkWell(
-                                  onTap: () => _removeCoverImage(modalSetState),
+                                  onTap:
+                                      () => _removeCoverImageInModal(
+                                        modalSetState,
+                                      ),
                                   child: Container(
-                                    padding: EdgeInsets.all(4),
+                                    padding: const EdgeInsets.all(4),
                                     decoration: BoxDecoration(
                                       color: Colors.red[400],
                                       shape: BoxShape.circle,
                                     ),
-                                    child: Icon(
+                                    child: const Icon(
                                       Icons.close,
                                       size: 16,
                                       color: Colors.white,
@@ -366,12 +436,12 @@ class _TechniquesLessonPageState extends State<TechniquesLessonPage> {
                               Positioned(
                                 child: InkWell(
                                   onTap:
-                                      () => _showImageSourceActionSheet(
+                                      () => _showImageSourceActionSheetForModal(
                                         modalContext,
                                         modalSetState,
                                       ),
                                   child: Container(
-                                    padding: EdgeInsets.all(6),
+                                    padding: const EdgeInsets.all(6),
                                     decoration: BoxDecoration(
                                       color: coverEditIconBg,
                                       shape: BoxShape.circle,
@@ -379,11 +449,11 @@ class _TechniquesLessonPageState extends State<TechniquesLessonPage> {
                                         BoxShadow(
                                           color: Colors.black12,
                                           blurRadius: 4,
-                                          offset: Offset(0, 1),
+                                          offset: const Offset(0, 1),
                                         ),
                                       ],
                                     ),
-                                    child: Icon(
+                                    child: const Icon(
                                       Icons.edit_outlined,
                                       size: 20,
                                       color: textDark,
@@ -394,8 +464,12 @@ class _TechniquesLessonPageState extends State<TechniquesLessonPage> {
                           ],
                         ),
                       ),
-                      SizedBox(height: 25),
-                      _buildFormTextField("Video URL", _videoUrlController),
+                      const SizedBox(height: 25),
+                      _buildFormTextField(
+                        "Video URL",
+                        _videoUrlController,
+                        isRequired: true,
+                      ),
                       _buildFormTextField(
                         "Başlık",
                         _titleController,
@@ -406,7 +480,7 @@ class _TechniquesLessonPageState extends State<TechniquesLessonPage> {
                         _descriptionController,
                         maxLines: 3,
                       ),
-                      SizedBox(height: 25),
+                      const SizedBox(height: 25),
                       Row(
                         children: [
                           Expanded(
@@ -414,12 +488,14 @@ class _TechniquesLessonPageState extends State<TechniquesLessonPage> {
                               onPressed: () => Navigator.pop(modalContext),
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: cancelButtonColor,
-                                padding: EdgeInsets.symmetric(vertical: 14),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 14,
+                                ),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(10),
                                 ),
                               ),
-                              child: Text(
+                              child: const Text(
                                 'Vazgeç',
                                 style: TextStyle(
                                   color: Colors.white,
@@ -428,25 +504,92 @@ class _TechniquesLessonPageState extends State<TechniquesLessonPage> {
                               ),
                             ),
                           ),
-                          SizedBox(width: 10),
+                          const SizedBox(width: 10),
                           Expanded(
                             child: ElevatedButton(
-                              onPressed: () {
+                              onPressed: () async {
                                 if (_formKey.currentState!.validate()) {
-                                  _saveOrUpdateLesson(lessonToEdit);
+                                  final courseProvider =
+                                      Provider.of<CourseProvider>(
+                                        this.context,
+                                        listen: false,
+                                      );
+                                  bool success;
+                                  if (isEditing && lessonToEdit != null) {
+                                    success = await courseProvider.updateCourse(
+                                      courseId: lessonToEdit.id,
+                                      title: _titleController.text.trim(),
+                                      videoUrl: _videoUrlController.text.trim(),
+                                      description:
+                                          _descriptionController.text
+                                                  .trim()
+                                                  .isEmpty
+                                              ? null
+                                              : _descriptionController.text
+                                                  .trim(),
+                                      coverImageFile:
+                                          _modalSelectedCoverImageFile,
+                                      removeCoverImage: _modalRemoveCoverImage,
+                                    );
+                                  } else {
+                                    success = await courseProvider.createCourse(
+                                      title: _titleController.text.trim(),
+                                      videoUrl: _videoUrlController.text.trim(),
+                                      description:
+                                          _descriptionController.text
+                                                  .trim()
+                                                  .isEmpty
+                                              ? null
+                                              : _descriptionController.text
+                                                  .trim(),
+                                      coverImageFile:
+                                          _modalSelectedCoverImageFile,
+                                    );
+                                  }
                                   Navigator.pop(modalContext);
+                                  if (mounted) {
+                                    if (success) {
+                                      ScaffoldMessenger.of(
+                                        this.context,
+                                      ).showSnackBar(
+                                        SnackBar(
+                                          content: Text(
+                                            isEditing
+                                                ? "Ders güncellendi."
+                                                : "Ders oluşturuldu.",
+                                          ),
+                                        ),
+                                      );
+                                      if (_isSelectionMode)
+                                        _exitSelectionMode();
+                                    } else {
+                                      ScaffoldMessenger.of(
+                                        this.context,
+                                      ).showSnackBar(
+                                        SnackBar(
+                                          content: Text(
+                                            isEditing
+                                                ? "Güncelleme hatası: ${courseProvider.errorSubmit ?? 'Bilinmeyen sorun.'}"
+                                                : "Oluşturma hatası: ${courseProvider.errorSubmit ?? 'Bilinmeyen sorun.'}",
+                                          ),
+                                        ),
+                                      );
+                                    }
+                                  }
                                 }
                               },
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: saveButtonColor,
-                                padding: EdgeInsets.symmetric(vertical: 14),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 14,
+                                ),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(10),
                                 ),
                               ),
                               child: Text(
-                                'Kaydet',
-                                style: TextStyle(
+                                isEditing ? 'Güncelle' : 'Oluştur',
+                                style: const TextStyle(
                                   color: Colors.white,
                                   fontSize: 16,
                                   fontWeight: FontWeight.bold,
@@ -456,7 +599,6 @@ class _TechniquesLessonPageState extends State<TechniquesLessonPage> {
                           ),
                         ],
                       ),
-                      SizedBox(height: 20),
                     ],
                   ),
                 ),
@@ -465,43 +607,11 @@ class _TechniquesLessonPageState extends State<TechniquesLessonPage> {
           },
         );
       },
-    ).then((_) {
-      setState(() {
-        _selectedCoverImageFile = null;
-      });
-    });
-  }
-
-  void _showImageSourceActionSheet(
-    BuildContext modalContext,
-    StateSetter modalSetState,
-  ) {
-    showModalBottomSheet(
-      context: modalContext,
-      builder: (BuildContext bContext) {
-        return SafeArea(
-          child: Wrap(
-            children: <Widget>[
-              ListTile(
-                leading: Icon(Icons.photo_library),
-                title: Text('Galeriden Seç'),
-                onTap: () {
-                  _pickImage(ImageSource.gallery, modalSetState);
-                  Navigator.of(bContext).pop();
-                },
-              ),
-              ListTile(
-                leading: Icon(Icons.photo_camera),
-                title: Text('Kameradan Çek'),
-                onTap: () {
-                  _pickImage(ImageSource.camera, modalSetState);
-                  Navigator.of(bContext).pop();
-                },
-              ),
-            ],
-          ),
-        );
-      },
+    ).whenComplete(
+      () => setState(() {
+        _modalSelectedCoverImageFile = null;
+        _modalRemoveCoverImage = false;
+      }),
     );
   }
 
@@ -518,16 +628,16 @@ class _TechniquesLessonPageState extends State<TechniquesLessonPage> {
         children: [
           Text(
             label,
-            style: TextStyle(
+            style: const TextStyle(
               color: textDark,
               fontWeight: FontWeight.w600,
               fontSize: 15,
             ),
           ),
-          SizedBox(height: 6),
+          const SizedBox(height: 6),
           TextFormField(
             controller: controller,
-            style: TextStyle(color: textDark),
+            style: const TextStyle(color: textDark),
             maxLines: maxLines,
             decoration: InputDecoration(
               filled: true,
@@ -547,7 +657,7 @@ class _TechniquesLessonPageState extends State<TechniquesLessonPage> {
                   width: 1.5,
                 ),
               ),
-              contentPadding: EdgeInsets.symmetric(
+              contentPadding: const EdgeInsets.symmetric(
                 horizontal: 12,
                 vertical: 14,
               ),
@@ -566,100 +676,6 @@ class _TechniquesLessonPageState extends State<TechniquesLessonPage> {
     );
   }
 
-  void _saveOrUpdateLesson(TechniqueLessonItem? existingLesson) {
-    setState(() {
-      String? finalCoverImagePath;
-      if (_selectedCoverImageFile != null) {
-        finalCoverImagePath = _selectedCoverImageFile!.path;
-      } else if (existingLesson != null) {
-        // Yeni resim seçilmedi ama düzenleme modundayız.
-        // Eğer kullanıcı resmi kaldırmadıysa (yani _removeCoverImage çağrılmadıysa
-        // ve dolayısıyla _selectedCoverImageFile null değilse),
-        // eski resmi korumalıyız.
-        // Ancak _selectedCoverImageFile zaten null ise, bu durumda resim ya hiç yoktu
-        // ya da kaldırıldı demektir.
-        finalCoverImagePath =
-            existingLesson.coverImagePath; // Eski resmi koru (eğer varsa)
-        // Eğer _selectedCoverImageFile null ise (yani modal'da resim yok veya silindi)
-        // ve mevcut dersin bir resmi varsa, bu yolun silinmesi gerekir.
-        // Bu mantık _openAddEditLessonModal içindeki _selectedCoverImageFile'ın
-        // nasıl yönetildiğine bağlı. Eğer _removeCoverImage çağrıldığında _selectedCoverImageFile null
-        // oluyorsa ve kullanıcı kaydederse, existingLesson.coverImagePath'in de null olması gerekir.
-        // Şu anki kodda, _selectedCoverImageFile null ise, finalCoverImagePath = null olur.
-        // Eğer kullanıcı var olan resmi silip kaydederse, _selectedCoverImageFile null olacak.
-        // Bu durumda existingLesson.coverImagePath'i de null yapmalıyız.
-        if (_selectedCoverImageFile == null &&
-            existingLesson.coverImagePath != null) {
-          // Bu durum, kullanıcının modalda resmi sildiği anlamına gelebilir
-          // VEYA yeni resim seçmediği anlamına gelebilir.
-          // Eğer modalda resim silindiyse (selectedCoverImageFile null olduysa)
-          // finalCoverImagePath'in null olması gerekir.
-          // Eğer sadece yeni resim seçilmediyse ve eskisi varsa o kalmalı.
-          // Bu mantığı netleştirmek için, _removeCoverImage içinde bir flag tutulabilir
-          // ya da _selectedCoverImageFile null olduğunda ve isEditing olduğunda
-          // finalCoverImagePath'e eski değeri değil null ataması yapılır.
-          // Şimdilik, _selectedCoverImageFile null ise resim yok kabul edelim.
-          finalCoverImagePath = null;
-        } else if (_selectedCoverImageFile == null &&
-            existingLesson.coverImagePath == null) {
-          finalCoverImagePath = null;
-        } else if (_selectedCoverImageFile == null &&
-            existingLesson.coverImagePath != null) {
-          // Yeni resim seçilmedi, eski resim var, onu koru
-          finalCoverImagePath = existingLesson.coverImagePath;
-        }
-      }
-
-      if (existingLesson != null) {
-        existingLesson.title = _titleController.text.trim();
-        existingLesson.videoUrl = _videoUrlController.text.trim();
-        existingLesson.description = _descriptionController.text.trim();
-        existingLesson.coverImagePath = finalCoverImagePath;
-      } else {
-        final newLesson = TechniqueLessonItem(
-          id: DateTime.now().millisecondsSinceEpoch.toString(),
-          gradient: _getRandomGradient(),
-          title: _titleController.text.trim(),
-          date:
-              "${DateTime.now().day} ${ayAdi(DateTime.now().month)} ${DateTime.now().year}",
-          views: "0B",
-          videoUrl: _videoUrlController.text.trim(),
-          description: _descriptionController.text.trim(),
-          coverImagePath: finalCoverImagePath,
-        );
-        _lessons.add(newLesson);
-      }
-      _filterLessons();
-      if (_isSelectionMode && existingLesson != null) _exitSelectionMode();
-      _selectedCoverImageFile = null;
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          existingLesson != null ? "Ders güncellendi." : "Ders eklendi.",
-        ),
-      ),
-    );
-  }
-
-  String ayAdi(int month) {
-    const aylar = [
-      "Ocak",
-      "Şubat",
-      "Mart",
-      "Nisan",
-      "Mayıs",
-      "Haziran",
-      "Temmuz",
-      "Ağustos",
-      "Eylül",
-      "Ekim",
-      "Kasım",
-      "Aralık",
-    ];
-    return aylar[month - 1];
-  }
-
   @override
   void dispose() {
     _searchController.dispose();
@@ -671,107 +687,288 @@ class _TechniquesLessonPageState extends State<TechniquesLessonPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar:
-          _isSelectionMode && _selectedLesson != null
-              ? AppBar(
-                backgroundColor: appBarBackground,
-                elevation: 0,
-                leading: IconButton(
-                  icon: Icon(Icons.close, color: textDark),
-                  onPressed: _exitSelectionMode,
-                ),
-                title: Text(
-                  _selectedLesson!.title,
-                  style: TextStyle(
-                    color: textDark,
-                    fontWeight: FontWeight.w500,
-                    fontSize: 18,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-                actions: [
-                  IconButton(
-                    icon: Icon(
-                      Icons.delete_outline,
-                      color: Colors.red[400],
-                      size: 28,
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    if (!authProvider.isAuthenticated || !authProvider.isMentor()) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted)
+          Navigator.pushNamedAndRemoveUntil(
+            context,
+            AppRoutes.login,
+            (route) => false,
+          );
+      });
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+
+    return Consumer<CourseProvider>(
+      builder: (context, courseProvider, child) {
+        final List<TechniqueLessonItem> allMentorUiCourses =
+            courseProvider.mentorCourses.map((dto) {
+              String? currentDescription;
+              String? currentVideoUrl;
+              // _selectedLessonUI, _onLessonLongPress ile en son seçilen ve detayları çekilen dersi tutar.
+              // Bu, listenin build edilmesi sırasında, o anki DTO'nun ID'si ile eşleşiyorsa kullanılır.
+              if (_selectedLessonUI != null &&
+                  _selectedLessonUI!.id == dto.id) {
+                currentDescription = _selectedLessonUI!.description;
+                currentVideoUrl = _selectedLessonUI!.videoUrl;
+              }
+              // Eğer provider'da genel bir selectedCourseDetail varsa (başka bir yerden set edilmiş olabilir),
+              // onu da fallback olarak kullanabiliriz.
+              else if (courseProvider.selectedCourseDetail != null &&
+                  courseProvider.selectedCourseDetail!.id == dto.id) {
+                currentDescription =
+                    courseProvider.selectedCourseDetail!.description;
+                currentVideoUrl = courseProvider.selectedCourseDetail!.video;
+              }
+              return _mapCourseDtoToTechniqueLessonItem(
+                dto,
+                descriptionFromDetail: currentDescription,
+                videoUrlFromDetail: currentVideoUrl,
+              );
+            }).toList();
+
+        List<TechniqueLessonItem> filteredUiLessons;
+        if (_searchTerm.isEmpty) {
+          filteredUiLessons = allMentorUiCourses;
+        } else {
+          filteredUiLessons =
+              allMentorUiCourses
+                  .where(
+                    (lesson) => lesson.title.toLowerCase().contains(
+                      _searchTerm.toLowerCase(),
                     ),
-                    onPressed: _deleteSelectedLesson,
-                    tooltip: 'Sil',
+                  )
+                  .toList();
+        }
+
+        Widget bodyContent;
+        if (courseProvider.isLoadingMentorCourses &&
+            allMentorUiCourses.isEmpty) {
+          bodyContent = const Center(
+            child: CircularProgressIndicator(color: Colors.orange),
+          );
+        } else if (!courseProvider.isLoadingMentorCourses &&
+            courseProvider.mentorCourses.isEmpty &&
+            (courseProvider.errorMentorCourses == null ||
+                courseProvider.errorMentorCourses!.isEmpty)) {
+          bodyContent = Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.school_outlined,
+                  size: 60,
+                  color: Colors.grey.shade400,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  "Henüz hiç ders eklenmemiş.",
+                  style: TextStyle(fontSize: 17, color: Colors.grey.shade700),
+                ),
+                const SizedBox(height: 10),
+                ElevatedButton.icon(
+                  onPressed: () => _openAddEditLessonModal(),
+                  icon: const Icon(Icons.add),
+                  label: const Text("İlk Dersi Ekle"),
+                ),
+              ],
+            ),
+          );
+        } else if (!courseProvider.isLoadingMentorCourses &&
+            courseProvider.errorMentorCourses != null &&
+            courseProvider.errorMentorCourses!.isNotEmpty) {
+          bodyContent = Center(
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.error_outline,
+                    color: Colors.red.shade300,
+                    size: 50,
                   ),
-                  IconButton(
-                    icon: Icon(Icons.edit_outlined, color: textDark, size: 26),
+                  const SizedBox(height: 10),
+                  Text(
+                    "Bir Hata Oluştu",
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.red.shade700,
+                    ),
+                  ),
+                  const SizedBox(height: 5),
+                  Text(
+                    courseProvider.errorMentorCourses!,
+                    style: TextStyle(color: Colors.red.shade600, fontSize: 15),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 15),
+                  ElevatedButton(
                     onPressed: () {
-                      if (_selectedLesson != null) {
-                        _openAddEditLessonModal(lessonToEdit: _selectedLesson);
-                      }
+                      courseProvider.fetchMentorCourses();
                     },
-                    tooltip: 'Düzenle',
+                    child: const Text("Tekrar Dene"),
                   ),
-                  SizedBox(width: 10),
                 ],
-              )
-              : AppBar(
-                backgroundColor: appBarBackground,
-                elevation: 0,
-                leading: IconButton(
-                  icon: Icon(Icons.arrow_back, color: textDark),
-                  onPressed: () => Navigator.of(context).pop(),
-                ),
-                title: Text(
-                  'Teknik Ders',
-                  style: TextStyle(
-                    color: textDark,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 20,
+              ),
+            ),
+          );
+        } else if (filteredUiLessons.isEmpty && _searchTerm.isNotEmpty) {
+          bodyContent = const Center(
+            child: Text(
+              "Arama sonucu bulunamadı.",
+              style: TextStyle(fontSize: 16, color: Colors.grey),
+            ),
+          );
+        } else if (filteredUiLessons.isNotEmpty) {
+          bodyContent = RefreshIndicator(
+            onRefresh: () => courseProvider.fetchMentorCourses(),
+            color: Colors.orange,
+            child: ListView.separated(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 20.0,
+                vertical: 16.0,
+              ),
+              itemCount: filteredUiLessons.length,
+              itemBuilder:
+                  (ctx, index) => _buildLessonItem(
+                    filteredUiLessons[index],
+                    courseProvider.isSubmitting,
+                  ),
+              separatorBuilder:
+                  (ctx, index) => Divider(
+                    height: 30,
+                    thickness: 0.5,
+                    color: Colors.grey.shade300,
+                  ),
+            ),
+          );
+        } else {
+          bodyContent = const Center(
+            child: Text("Dersler yükleniyor veya bir sorun oluştu."),
+          );
+        }
+
+        return Scaffold(
+          backgroundColor: Colors.white,
+          appBar:
+              _isSelectionMode && _selectedLessonUI != null
+                  ? AppBar(
+                    backgroundColor: appBarBackground,
+                    elevation: 0,
+                    leading: IconButton(
+                      icon: const Icon(Icons.close, color: textDark),
+                      onPressed: _exitSelectionMode,
+                    ),
+                    title: Text(
+                      _selectedLessonUI!.title,
+                      style: const TextStyle(
+                        color: textDark,
+                        fontWeight: FontWeight.w500,
+                        fontSize: 18,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    actions: [
+                      IconButton(
+                        icon: Icon(
+                          Icons.delete_outline,
+                          color: Colors.red[400],
+                          size: 28,
+                        ),
+                        onPressed:
+                            courseProvider.isSubmitting
+                                ? null
+                                : _deleteSelectedLesson,
+                        tooltip: 'Sil',
+                      ),
+                      IconButton(
+                        icon: const Icon(
+                          Icons.edit_outlined,
+                          color: textDark,
+                          size: 26,
+                        ),
+                        onPressed:
+                            courseProvider.isSubmitting
+                                ? null
+                                : () {
+                                  if (_selectedLessonUI != null)
+                                    _openAddEditLessonModal(
+                                      lessonToEdit: _selectedLessonUI,
+                                    );
+                                },
+                        tooltip: 'Düzenle',
+                      ),
+                      const SizedBox(width: 10),
+                    ],
+                  )
+                  : AppBar(
+                    backgroundColor: appBarBackground,
+                    elevation: 0,
+                    leading: IconButton(
+                      icon: const Icon(Icons.arrow_back, color: textDark),
+                      onPressed: () => Navigator.of(context).pop(),
+                    ),
+                    title: const Text(
+                      'Teknik Ders Yönetimi',
+                      style: TextStyle(
+                        color: textDark,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 20,
+                      ),
+                    ),
+                    centerTitle: false,
+                    titleSpacing: 0,
+                  ),
+          body: Column(
+            children: [
+              _buildSearchBar(),
+              if (courseProvider.isLoadingMentorCourses &&
+                  allMentorUiCourses.isNotEmpty)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8.0),
+                  child: Center(
+                    child: SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.orange,
+                      ),
+                    ),
                   ),
                 ),
-                centerTitle: false,
-                titleSpacing: 0,
-              ),
-      body: Column(
-        children: [
-          _buildSearchBar(),
-          Expanded(
+              Expanded(child: bodyContent),
+            ],
+          ),
+          floatingActionButton: FloatingActionButton(
+            onPressed:
+                courseProvider.isSubmitting ||
+                        courseProvider.isLoadingMentorCourses
+                    ? null
+                    : () => _openAddEditLessonModal(),
+            backgroundColor: fabColor,
             child:
-                _filteredLessons.isEmpty && _searchTerm.isNotEmpty
-                    ? Center(
-                      child: Text(
-                        "Arama sonucu bulunamadı.",
-                        style: TextStyle(
-                          fontSize: 16,
-                          color: Colors.grey.shade600,
-                        ),
+                (courseProvider.isSubmitting ||
+                        (courseProvider.isLoadingMentorCourses &&
+                            allMentorUiCourses.isEmpty))
+                    ? const SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: CircularProgressIndicator(
+                        color: Colors.white,
+                        strokeWidth: 3,
                       ),
                     )
-                    : ListView.separated(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 20.0,
-                        vertical: 16.0,
-                      ),
-                      itemCount: _filteredLessons.length,
-                      itemBuilder: (context, index) {
-                        final lesson = _filteredLessons[index];
-                        return _buildLessonItem(lesson);
-                      },
-                      separatorBuilder:
-                          (context, index) => Divider(
-                            height: 30,
-                            thickness: 0.5,
-                            color: Colors.grey.shade300,
-                          ),
-                    ),
+                    : const Icon(Icons.add, color: Colors.white, size: 32),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
           ),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _openAddEditLessonModal(),
-        backgroundColor: fabColor,
-        child: Icon(Icons.add, color: Colors.white, size: 32),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      ),
+        );
+      },
     );
   }
 
@@ -789,26 +986,28 @@ class _TechniquesLessonPageState extends State<TechniquesLessonPage> {
             child: TextField(
               controller: _searchController,
               decoration: InputDecoration(
-                hintText: 'Tekniklerde Ara...',
-                hintStyle: TextStyle(color: searchInputHintColor, fontSize: 16),
+                hintText: 'Derslerde Ara...',
+                hintStyle: const TextStyle(
+                  color: searchInputHintColor,
+                  fontSize: 16,
+                ),
                 border: UnderlineInputBorder(
                   borderSide: BorderSide(color: Colors.grey.shade300),
                 ),
                 enabledBorder: UnderlineInputBorder(
                   borderSide: BorderSide(color: Colors.grey.shade300),
                 ),
-                focusedBorder: UnderlineInputBorder(
+                focusedBorder: const UnderlineInputBorder(
                   borderSide: BorderSide(color: searchButtonColor, width: 1.5),
                 ),
-                contentPadding: EdgeInsets.symmetric(vertical: 10),
+                contentPadding: const EdgeInsets.symmetric(vertical: 10),
               ),
-              style: TextStyle(color: textDark, fontSize: 16),
+              style: const TextStyle(color: textDark, fontSize: 16),
             ),
           ),
-          SizedBox(width: 12),
+          const SizedBox(width: 12),
           InkWell(
             onTap: () {
-              _filterLessons();
               FocusScope.of(context).unfocus();
             },
             borderRadius: BorderRadius.circular(28),
@@ -822,11 +1021,11 @@ class _TechniquesLessonPageState extends State<TechniquesLessonPage> {
                   BoxShadow(
                     color: Colors.black.withOpacity(0.15),
                     blurRadius: 4,
-                    offset: Offset(0, 2),
+                    offset: const Offset(0, 2),
                   ),
                 ],
               ),
-              child: Center(
+              child: const Center(
                 child: Icon(Icons.search, color: Colors.white, size: 28),
               ),
             ),
@@ -836,38 +1035,26 @@ class _TechniquesLessonPageState extends State<TechniquesLessonPage> {
     );
   }
 
-  Widget _buildLessonItem(TechniqueLessonItem lesson) {
-    File? coverImageFile;
-    bool useDefaultCover = true;
-
-    if (lesson.coverImagePath != null &&
-        File(lesson.coverImagePath!).existsSync()) {
-      coverImageFile = File(lesson.coverImagePath!);
-      useDefaultCover = false;
-    }
-
+  Widget _buildLessonItem(TechniqueLessonItem lesson, bool isSubmitting) {
     return InkWell(
-      onTap: () {
-        _onLessonLongPress(lesson);
-      },
-      onLongPress: () => _onLessonLongPress(lesson),
+      onTap: isSubmitting ? null : () => _onLessonLongPress(lesson),
+      onLongPress: isSubmitting ? null : () => _onLessonLongPress(lesson),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 10.0),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             CoverCardWidget(
-              size: kUnifiedListItemCoverSize, // <<< DEĞİŞTİ
-              borderRadius:
-                  kUnifiedListItemBorderRadius, // <<< DEĞİŞTİ (veya kLessonItemBorderRadius'u kUnifiedListItemBorderRadius ile aynı değere ayarlayın)
-              imageFile: coverImageFile,
-              gradient: useDefaultCover ? lesson.gradient : null,
-              imageAssetPath: useDefaultCover ? kDefaultCoverIconAsset : null,
-              iconColor: useDefaultCover ? Colors.white : null,
-              iconOrImageSize:
-                  kUnifiedListItemCoverSize * 0.7, // Boyuta göre orantılı
+              size: kUnifiedListItemCoverSize,
+              borderRadius: kUnifiedListItemBorderRadius,
+              imageNetworkPath: lesson.coverImagePath,
+              gradient: lesson.coverImagePath == null ? lesson.gradient : null,
+              imageAssetPath:
+                  lesson.coverImagePath == null ? kDefaultCoverIconAsset : null,
+              iconColor: lesson.coverImagePath == null ? Colors.white : null,
+              iconOrImageSize: kUnifiedListItemCoverSize * 0.7,
             ),
-            SizedBox(width: 18),
+            const SizedBox(width: 18),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -875,7 +1062,7 @@ class _TechniquesLessonPageState extends State<TechniquesLessonPage> {
                 children: [
                   Text(
                     lesson.title,
-                    style: TextStyle(
+                    style: const TextStyle(
                       color: itemTitleColor,
                       fontSize: 17,
                       fontWeight: FontWeight.w600,
@@ -883,33 +1070,33 @@ class _TechniquesLessonPageState extends State<TechniquesLessonPage> {
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  SizedBox(height: 8),
+                  const SizedBox(height: 8),
                   Row(
                     children: [
-                      Icon(
+                      const Icon(
                         Icons.calendar_today_outlined,
                         size: 16,
                         color: iconColor,
                       ),
-                      SizedBox(width: 5),
+                      const SizedBox(width: 5),
                       Text(
                         lesson.date,
-                        style: TextStyle(
+                        style: const TextStyle(
                           fontSize: 13,
                           color: itemSubtitleColor,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
-                      SizedBox(width: 14),
-                      Icon(
+                      const SizedBox(width: 14),
+                      const Icon(
                         Icons.visibility_outlined,
                         size: 18,
                         color: iconColor,
                       ),
-                      SizedBox(width: 5),
+                      const SizedBox(width: 5),
                       Text(
                         lesson.views,
-                        style: TextStyle(
+                        style: const TextStyle(
                           fontSize: 13,
                           color: itemSubtitleColor,
                           fontWeight: FontWeight.bold,
