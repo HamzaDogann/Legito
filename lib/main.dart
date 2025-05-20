@@ -10,8 +10,9 @@ import 'core/navigation/route_generator.dart';
 import 'state_management/auth_provider.dart';
 import 'features/user_features/library/state_management/library_provider.dart';
 import 'features/mentor_features/tips_mentor/state_management/tip_provider.dart';
-// YENİ IMPORT (CourseProvider)
-import 'features/course/state_management/course_provider.dart'; // Doğru yolu kontrol edin
+import 'features/course/state_management/course_provider.dart';
+// YENİ IMPORT (ReadingProvider)
+import 'features/user_features/reading_session/state_management/reading_provider.dart'; // Doğru yolu kontrol edin
 
 class MyHttpOverrides extends HttpOverrides {
   @override
@@ -36,35 +37,36 @@ void main() {
               (context) => LibraryProvider(
                 Provider.of<AuthProvider>(context, listen: false),
               ),
-          update:
-              (context, auth, previous) =>
-                  LibraryProvider(auth), // Basit update
+          update: (context, auth, previous) => LibraryProvider(auth),
         ),
         ChangeNotifierProxyProvider<AuthProvider, TipProvider>(
           create:
               (context) => TipProvider(
                 Provider.of<AuthProvider>(context, listen: false),
               ),
-          update:
-              (context, auth, previous) => TipProvider(auth), // Basit update
+          update: (context, auth, previous) => TipProvider(auth),
         ),
-        // --- YENİ CourseProvider EKLEMESİ ---
         ChangeNotifierProxyProvider<AuthProvider, CourseProvider>(
           create:
               (context) => CourseProvider(
                 Provider.of<AuthProvider>(context, listen: false),
               ),
-          update: (context, auth, previousCourseProvider) {
-            // AuthProvider değiştiğinde CourseProvider'ı yeni auth ile güncelle.
-            // Eğer CourseProvider'ın kendi state'ini koruması ve sadece auth referansını
-            // güncellemesi gerekiyorsa, CourseProvider'a bir updateAuth metodu eklenebilir.
-            // Şimdilik, her AuthProvider değişikliğinde yeni bir CourseProvider oluşturuyoruz.
-            // Bu, CourseProvider'ın constructor'ında auth durumuna göre ilk yüklemeleri
-            // yapması için uygundur.
-            return CourseProvider(auth);
+          update: (context, auth, previous) => CourseProvider(auth),
+        ),
+        // --- YENİ ReadingProvider EKLEMESİ ---
+        ChangeNotifierProxyProvider<AuthProvider, ReadingProvider>(
+          create:
+              (context) => ReadingProvider(
+                Provider.of<AuthProvider>(context, listen: false),
+              ),
+          update: (context, auth, previousReadingProvider) {
+            // AuthProvider değiştiğinde ReadingProvider'ı yeni auth ile güncelle.
+            // ReadingProvider'ın constructor'ı AuthProvider'ı aldığı için bu şekilde
+            // yeni bir instance oluşturmak, state'in doğru yönetilmesini sağlar.
+            return ReadingProvider(auth);
           },
         ),
-        // --- BİTİŞ: CourseProvider EKLEMESİ ---
+        // --- BİTİŞ: ReadingProvider EKLEMESİ ---
       ],
       child: const MainApp(),
     ),

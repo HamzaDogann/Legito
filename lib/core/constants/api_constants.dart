@@ -43,4 +43,9 @@ class ApiConstants {
       "/Course/Update"; // PUT (Mentor için, /{courseId} eklenecek)
   static const String deleteCourseEndpoint =
       "/Course/Delete"; // DELETE (Mentor için, /{courseId} eklenecek)
+
+  //! Reading Session
+  static const String uploadReadingImageEndpoint = "/Reading/Image"; // POST
+  static const String uploadReadingPdfEndpoint = "/Reading/Pdf"; // POST
+  static const String createReadingSessionEndpoint = "/Reading/Create"; // POST
 }

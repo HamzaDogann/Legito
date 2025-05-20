@@ -1,24 +1,21 @@
 // lib/core/navigation/route_generator.dart
-
 import 'package:flutter/material.dart';
-import 'app_routes.dart'; // Rota isimleri
+import 'app_routes.dart';
 
-// Argüman Sınıfları - Bu importların projenizde doğru olduğundan emin olun
+// Argüman Sınıfları
 import '../../features/user_features/support_user/models/mentor_account_args.dart';
 import '../../features/user_features/techniques_user/models/lesson_detail_args.dart';
 import '../../features/user_features/support_user/models/chat_args.dart';
 import '../../features/mentor_features/interactions_mentor/models/user_account_args.dart';
 import '../../features/mentor_features/home/models/mentor_home_args.dart';
-// import '../../features/mentor_features/dashboard/models/mentor_dashboard_args.dart'; // Eğer MentorDashboardPage argüman alacaksa
 
-// --- EKRAN IMPORTLARI ---
-// Bu importların projenizdeki gerçek dosya yollarına göre doğru olduğundan emin olun.
+// EKRAN IMPORTLARI
 // Auth & Common Screens
 import '../../features/auth/screens/SplashScreen.dart';
 import '../../features/auth/screens/LoginPage.dart';
 import '../../features/auth/screens/RegisterPage.dart';
 import '../../features/auth/screens/MembershipAgreementPage.dart';
-import '../../features/home/screens/PublicHomePage.dart'; // Yol common_screens olarak varsayıldı
+import '../../features/home/screens/PublicHomePage.dart';
 import '../../features/common_screens/screens/AccountPage.dart';
 import '../../features/common_screens/screens/AccountSettingPage.dart';
 import '../../features/common_screens/screens/UpdatePasswordPage.dart';
@@ -31,6 +28,7 @@ import '../../features/user_features/dashboard/screens/UserDashboard.dart';
 import '../../features/user_features/library/screens/LibraryPage.dart';
 import '../../features/user_features/techniques_user/screens/TechniquesPage.dart';
 import '../../features/user_features/techniques_user/screens/LessonDetailPage.dart';
+import '../../features/user_features/reading_session/screens/StartReadPage.dart';
 import '../../features/user_features/support_user/screens/SupportPage.dart';
 import '../../features/user_features/support_user/screens/SearchMentorPage.dart';
 import '../../features/user_features/support_user/screens/ChatPage.dart'
@@ -39,22 +37,17 @@ import '../../features/user_features/support_user/screens/MentorAccountPage.dart
 
 // Mentor Feature Screens
 import '../../features/mentor_features/home/screens/MentorHomePage.dart';
-import '../../features/mentor_features/dashboard/screens/MentorDashboardPage.dart'; // <<< MentorDashboardPage IMPORT EDİLDİ
+import '../../features/mentor_features/dashboard/screens/MentorDashboardPage.dart';
 import '../../features/mentor_features/techniques_mentor/screens/TechniquesLessonPage.dart';
 import '../../features/mentor_features/tips_mentor/screens/TipsPage.dart';
 import '../../features/mentor_features/interactions_mentor/screens/UserAccountPage.dart';
-// --- EKRAN IMPORTLARI BİTİŞ ---
 
 class RouteGenerator {
   static Route<dynamic> generateRoute(RouteSettings settings) {
     final args = settings.arguments;
-
-    print(
-      "RouteGenerator: Rota isteniyor -> ${settings.name}",
-    ); // Hangi rota istendiğini logla
+    print("RouteGenerator: Rota isteniyor -> ${settings.name}");
 
     switch (settings.name) {
-      // Auth & Common
       case AppRoutes.splash:
         return MaterialPageRoute(builder: (_) => const SplashScreen());
       case AppRoutes.login:
@@ -96,6 +89,11 @@ class RouteGenerator {
         return _errorRoute(
           message: 'Ders detay argümanları eksik veya geçersiz.',
         );
+      case AppRoutes.startReadPage: // <<< YENİ CASE
+        // final startReadArgs = args as StartReadArgs?; // Eğer argüman alacaksa
+        return MaterialPageRoute(
+          builder: (_) => const StartReadPage(/*args: startReadArgs*/),
+        );
       case AppRoutes.supportUser:
         return MaterialPageRoute(builder: (_) => const SupportPage());
       case AppRoutes.searchMentor:
@@ -125,15 +123,8 @@ class RouteGenerator {
         return _errorRoute(
           message: 'Mentor ana sayfa argümanları eksik veya geçersiz.',
         );
-
-      case AppRoutes
-          .mentorDashboard: // <<< MentorDashboardPage İÇİN CASE EKLENDİ
-        // Eğer MentorDashboardPage argüman alacaksa, burada kontrol edin:
-        // if (args is MentorDashboardArgs) {
-        //   return MaterialPageRoute(builder: (_) => MentorDashboardPage(args: args));
-        // }
+      case AppRoutes.mentorDashboard:
         return MaterialPageRoute(builder: (_) => const MentorDashboardPage());
-
       case AppRoutes.techniquesLessonMentor:
         return MaterialPageRoute(builder: (_) => const TechniquesLessonPage());
       case AppRoutes.tipsMentor:
@@ -146,12 +137,8 @@ class RouteGenerator {
           message: 'Kullanıcı profil argümanları eksik veya geçersiz.',
         );
 
-      // TODO: Admin rotaları eklenecek
-
       default:
-        print(
-          "RouteGenerator: Tanımlanmayan rota -> ${settings.name}",
-        ); // Tanımlanmayan rotayı logla
+        print("RouteGenerator: Tanımlanmayan rota -> ${settings.name}");
         return _errorRoute(message: "Rota bulunamadı: ${settings.name}");
     }
   }

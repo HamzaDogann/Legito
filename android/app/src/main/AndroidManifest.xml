@@ -10,7 +10,7 @@
         android:label="legito"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
-        android:usesCleartextTraffic="true">   <!-- ⬅️  BURAYA EKLENDİ -->
+        android:usesCleartextTraffic="true">  
 
         <activity
             android:name=".MainActivity"

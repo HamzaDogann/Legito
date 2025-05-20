@@ -425,7 +425,7 @@ class _PublicHomeScreenState extends State<PublicHomeScreen> {
           backgroundGradient: PublicHomeScreen.purpleGradient,
           imagePath: 'assets/images/book.png',
           imageHeight: 110,
-          onTap: () => Navigator.pushNamed(context, AppRoutes.library),
+          onTap: () => Navigator.pushNamed(context, AppRoutes.startReadPage),
         ),
         buildGridItem(
           title: 'Teknikleri\nÖğren',
