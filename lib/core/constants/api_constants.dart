@@ -51,4 +51,7 @@ class ApiConstants {
 
   //! Word (Kelime Alıştırması)
   static const String getRandomWordsEndpoint = "/Word/Random";
+
+  //! Dashboard
+  static const String getUserDashboardEndpoint = "/Dashboard/GetUser";
 }

@@ -22,8 +22,7 @@ class AppRoutes {
   static const String techniquesUser = '/user/techniques';
   static const String lessonDetailUser = '/user/lesson-detail';
   static const String startReadPage = '/user/start-read';
-  static const String vocabularyPractice =
-      '/user/vocabulary-practice'; // <<< YENİ KELİMELERİ KAVRA ROTASI
+  static const String vocabularyPractice = '/user/vocabulary-practice';
   static const String supportUser = '/user/support';
   static const String searchMentor = '/user/search-mentor';
   static const String chatWithMentor = '/user/chat';
