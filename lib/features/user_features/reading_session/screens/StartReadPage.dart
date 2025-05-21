@@ -33,7 +33,6 @@ class _StartReadPageState extends State<StartReadPage> {
       context,
       listen: false,
     );
-    // Yeni dosya seçmeden önce önceki hatayı temizle (UI'da kalmasın diye)
     readingProvider.clearLastPickedFileAndError();
     await readingProvider.pickAndProcessFile(source);
     if (readingProvider.operationError != null && mounted) {
@@ -51,12 +50,15 @@ class _StartReadPageState extends State<StartReadPage> {
   void _showImageSourceActionSheet(BuildContext context) {
     showModalBottomSheet(
       context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
       builder: (BuildContext bContext) {
         return SafeArea(
           child: Wrap(
             children: <Widget>[
               ListTile(
-                leading: const Icon(Icons.photo_library),
+                leading: const Icon(Icons.photo_library_outlined),
                 title: const Text('Galeriden Seç'),
                 onTap: () {
                   Navigator.of(bContext).pop();
@@ -64,7 +66,7 @@ class _StartReadPageState extends State<StartReadPage> {
                 },
               ),
               ListTile(
-                leading: const Icon(Icons.photo_camera),
+                leading: const Icon(Icons.camera_alt_outlined),
                 title: const Text('Kameradan Çek'),
                 onTap: () {
                   Navigator.of(bContext).pop();
@@ -93,6 +95,14 @@ class _StartReadPageState extends State<StartReadPage> {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
+    final Color primaryColor = Theme.of(context).colorScheme.primary;
+    final Color onPrimaryColor = Theme.of(context).colorScheme.onPrimary;
+    final Color secondaryTextColor = Colors.grey.shade700;
+    final Color errorColor = Theme.of(context).colorScheme.error;
+    final Color subtleTextColor = Colors.grey.shade600;
+    final Color cardBackgroundColor = Theme.of(context).cardColor;
+    final Color disabledButtonColor = Colors.grey.shade400;
+
     return WillPopScope(
       onWillPop: () async {
         Provider.of<ReadingProvider>(context, listen: false).resetTimer();
@@ -111,31 +121,67 @@ class _StartReadPageState extends State<StartReadPage> {
         ),
         body: Consumer<ReadingProvider>(
           builder: (context, readingProvider, child) {
+            Widget content;
+            switch (readingProvider.currentStatus) {
+              case ReadingStatus.initial:
+                content = _buildInitialView(
+                  context,
+                  readingProvider,
+                  primaryColor,
+                  onPrimaryColor,
+                  secondaryTextColor,
+                );
+                break;
+              case ReadingStatus.started:
+              case ReadingStatus.paused:
+                content = _buildTimerView(
+                  context,
+                  readingProvider,
+                  primaryColor,
+                  onPrimaryColor,
+                  secondaryTextColor,
+                );
+                break;
+              case ReadingStatus.finishedFileProcessing:
+                content = _buildFileProcessingView(
+                  context,
+                  readingProvider,
+                  primaryColor,
+                  onPrimaryColor,
+                  secondaryTextColor,
+                  errorColor,
+                  subtleTextColor,
+                  disabledButtonColor,
+                );
+                break;
+              case ReadingStatus.finishedSession:
+                if (readingProvider.sessionResult != null) {
+                  content = _buildSessionResultView(
+                    context,
+                    readingProvider,
+                    primaryColor,
+                    onPrimaryColor,
+                    secondaryTextColor,
+                    cardBackgroundColor,
+                  );
+                } else {
+                  content = _buildInitialView(
+                    context,
+                    readingProvider,
+                    primaryColor,
+                    onPrimaryColor,
+                    secondaryTextColor,
+                  );
+                }
+                break;
+            }
             return Center(
               child: Padding(
-                padding: const EdgeInsets.all(20.0),
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: <Widget>[
-                      if (readingProvider.currentStatus ==
-                          ReadingStatus.initial)
-                        _buildInitialView(context, readingProvider),
-                      if (readingProvider.currentStatus ==
-                              ReadingStatus.started ||
-                          readingProvider.currentStatus == ReadingStatus.paused)
-                        _buildTimerView(context, readingProvider),
-                      if (readingProvider.currentStatus ==
-                          ReadingStatus.finishedFileProcessing)
-                        _buildFileProcessingView(context, readingProvider),
-                      if (readingProvider.currentStatus ==
-                              ReadingStatus.finishedSession &&
-                          readingProvider.sessionResult != null)
-                        _buildSessionResultView(context, readingProvider),
-                    ],
-                  ),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24.0,
+                  vertical: 30.0,
                 ),
+                child: SingleChildScrollView(child: content),
               ),
             );
           },
@@ -147,27 +193,39 @@ class _StartReadPageState extends State<StartReadPage> {
   Widget _buildInitialView(
     BuildContext context,
     ReadingProvider readingProvider,
+    Color primaryColor,
+    Color onPrimaryColor,
+    Color secondaryTextColor,
   ) {
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Icon(
           Icons.timer_outlined,
-          size: 100,
-          color: Theme.of(context).colorScheme.primary.withOpacity(0.7),
+          size: 120,
+          color: primaryColor.withOpacity(0.8),
         ),
         const SizedBox(height: 30),
         Text(
           "Okuma hızınızı ölçmek ve geliştirmek için yeni bir seans başlatın.",
           textAlign: TextAlign.center,
-          style: TextStyle(fontSize: 18, color: Colors.grey.shade700),
+          style: TextStyle(
+            fontSize: 18,
+            color: secondaryTextColor,
+            height: 1.4,
+          ),
         ),
-        const SizedBox(height: 40),
+        const SizedBox(height: 50),
         ElevatedButton.icon(
-          icon: const Icon(Icons.play_arrow, size: 32),
-          label: const Text('Okumaya Başla', style: TextStyle(fontSize: 20)),
+          icon: const Icon(Icons.play_arrow_rounded, size: 32),
+          label: const Text('Okumaya Başla'),
           style: ElevatedButton.styleFrom(
-            padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 40),
+            textStyle: const TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w600,
+            ),
+            padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 32),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
             ),
@@ -181,46 +239,71 @@ class _StartReadPageState extends State<StartReadPage> {
   Widget _buildTimerView(
     BuildContext context,
     ReadingProvider readingProvider,
+    Color primaryColor,
+    Color onPrimaryColor,
+    Color secondaryTextColor,
   ) {
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text(
           readingProvider.displayTime,
+          textAlign: TextAlign.center,
           style: TextStyle(
-            fontSize: 72,
-            fontWeight: FontWeight.w300,
-            color: Theme.of(context).colorScheme.primary,
+            fontSize: 80,
+            fontWeight: FontWeight.w200,
+            color: primaryColor,
+            letterSpacing: 2,
           ),
         ),
-        const SizedBox(height: 50),
+        const SizedBox(height: 70), // Zamanlayıcı ile ilk buton arası boşluk
+        // 1. Duraklat/Devam Et Butonu (Tam Genişlik)
+        SizedBox(
+          width: double.infinity,
+          child: _buildTimerButton(
+            icon:
+                readingProvider.isTimerRunning
+                    ? Icons.pause_rounded
+                    : Icons.play_arrow_rounded,
+            label: readingProvider.isTimerRunning ? 'Duraklat' : 'Devam Et',
+            onPressed:
+                readingProvider.isTimerRunning
+                    ? readingProvider.pauseTimer
+                    : readingProvider.resumeTimer,
+            color: primaryColor, // Ana tema rengi
+            isFilled: true, // Dolgulu buton
+            fontSize: 18, // Biraz daha büyük font
+            padding: const EdgeInsets.symmetric(vertical: 16), // Dikey padding
+          ),
+        ),
+        const SizedBox(height: 20), // Buton grupları arası boşluk
+        // 2. Sıfırla ve Bitir Butonları (Yan Yana, Yarı Genişlik)
         Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
-            _buildTimerButton(
-              icon: Icons.refresh,
-              label: 'Sıfırla',
-              onPressed: readingProvider.resetTimer,
-              color: Colors.grey.shade700,
+            Expanded(
+              child: _buildTimerButton(
+                icon: Icons.refresh_rounded,
+                label: 'Sıfırla',
+                onPressed: readingProvider.resetTimer,
+                color: secondaryTextColor, // Gri ton
+                isFilled: false, // Outlined stil
+                fontSize: 16,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+              ),
             ),
-            _buildTimerButton(
-              icon:
-                  readingProvider.isTimerRunning
-                      ? Icons.pause
-                      : Icons.play_arrow,
-              label: readingProvider.isTimerRunning ? 'Duraklat' : 'Devam Et',
-              onPressed:
-                  readingProvider.isTimerRunning
-                      ? readingProvider.pauseTimer
-                      : readingProvider.resumeTimer,
-              color: Theme.of(context).colorScheme.primary,
-              isFilled: true,
-            ),
-            _buildTimerButton(
-              icon: Icons.stop,
-              label: 'Bitir',
-              onPressed: readingProvider.finishFileProcessingPhase,
-              color: Colors.green.shade700,
+            const SizedBox(width: 16), // İki buton arası boşluk
+            Expanded(
+              child: _buildTimerButton(
+                icon: Icons.stop_rounded,
+                label: 'Bitir',
+                onPressed: readingProvider.finishFileProcessingPhase,
+                color: primaryColor, // Ana tema rengi (çerçeve için)
+                isFilled: false, // Outlined stil
+                isOutlinedPrimary: true, // Ana tema renginde outline
+                fontSize: 16,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+              ),
             ),
           ],
         ),
@@ -234,37 +317,67 @@ class _StartReadPageState extends State<StartReadPage> {
     required VoidCallback onPressed,
     required Color color,
     bool isFilled = false,
+    bool isOutlinedPrimary = false,
+    double fontSize = 15,
+    EdgeInsetsGeometry padding = const EdgeInsets.symmetric(
+      horizontal: 16,
+      vertical: 12,
+    ),
   }) {
-    return ElevatedButton.icon(
-      icon: Icon(icon, size: 20),
-      label: Text(label),
-      onPressed: onPressed,
-      style:
-          isFilled
-              ? ElevatedButton.styleFrom(
-                backgroundColor: color,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
-                ),
-                textStyle: const TextStyle(fontSize: 14),
-              )
-              : OutlinedButton.styleFrom(
-                foregroundColor: color,
-                side: BorderSide(color: color),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
-                ),
-                textStyle: const TextStyle(fontSize: 14),
+    final ButtonStyle style =
+        isFilled
+            ? ElevatedButton.styleFrom(
+              backgroundColor: color,
+              foregroundColor:
+                  Colors.white, // Dolgulu butonlarda metin genellikle beyaz
+              padding: padding,
+              textStyle: TextStyle(
+                fontSize: fontSize,
+                fontWeight: FontWeight.w600,
               ),
-    );
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            )
+            : OutlinedButton.styleFrom(
+              foregroundColor: isOutlinedPrimary ? color : color,
+              side: BorderSide(color: color, width: 1.5),
+              padding: padding,
+              textStyle: TextStyle(
+                fontSize: fontSize,
+                fontWeight: FontWeight.w600,
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            );
+
+    if (isFilled) {
+      return ElevatedButton.icon(
+        icon: Icon(icon, size: fontSize + 4),
+        label: Text(label),
+        onPressed: onPressed,
+        style: style,
+      );
+    } else {
+      return OutlinedButton.icon(
+        icon: Icon(icon, size: fontSize + 4),
+        label: Text(label),
+        onPressed: onPressed,
+        style: style,
+      );
+    }
   }
 
   Widget _buildFileProcessingView(
     BuildContext context,
     ReadingProvider readingProvider,
+    Color primaryColor,
+    Color onPrimaryColor,
+    Color secondaryTextColor,
+    Color errorColor,
+    Color subtleTextColor,
+    Color disabledButtonColor,
   ) {
     bool canAddMoreFiles =
         !readingProvider.isLoadingFile && !readingProvider.isSubmittingSession;
@@ -274,70 +387,73 @@ class _StartReadPageState extends State<StartReadPage> {
         !readingProvider.isLoadingFile;
 
     return Column(
-      // SingleChildScrollView yerine Column, çünkü parent'ı zaten SingleChildScrollView
       mainAxisAlignment: MainAxisAlignment.center,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text(
           "Okuma Süreniz: ${readingProvider.displayTime}",
-          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
+          style: const TextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF1F2937),
+          ),
           textAlign: TextAlign.center,
         ),
-        const SizedBox(height: 25),
-        const Text(
+        const SizedBox(height: 30),
+        Text(
           "Okuduğunuz metnin fotoğrafını yükleyin:",
-          style: TextStyle(fontSize: 16),
+          style: TextStyle(fontSize: 17, color: secondaryTextColor),
           textAlign: TextAlign.center,
         ),
-        const SizedBox(height: 15),
-
-        // "Fotoğraf Ekle" veya "Yeni Fotoğraf Ekle" Butonu
+        const SizedBox(height: 20),
         ElevatedButton.icon(
-          icon: const Icon(Icons.add_a_photo_outlined),
+          icon: const Icon(Icons.add_a_photo_outlined, size: 24),
           label: Text(
             readingProvider.totalWordCount > 0
                 ? 'Yeni Fotoğraf Ekle'
                 : 'Fotoğraf Ekle',
+            style: const TextStyle(fontSize: 16),
           ),
           style: ElevatedButton.styleFrom(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-            // backgroundColor: Colors.blueGrey.shade700, // Farklı bir renk
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 15),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+            // backgroundColor: canAddMoreFiles ? primaryColor.withOpacity(0.1) : disabledButtonColor.withOpacity(0.5), // Outlined benzeri görünüm
+            // foregroundColor: canAddMoreFiles ? primaryColor : Colors.white70,
+            // side: canAddMoreFiles ? BorderSide(color: primaryColor) : null
           ),
           onPressed:
               canAddMoreFiles
                   ? () => _showImageSourceActionSheet(context)
                   : null,
         ),
-
         if (readingProvider.isLoadingFile)
           const Padding(
-            padding: EdgeInsets.symmetric(vertical: 15.0),
+            padding: EdgeInsets.symmetric(vertical: 20.0),
             child: Center(child: CircularProgressIndicator()),
           ),
-
         if (readingProvider.operationError != null &&
             !readingProvider.isLoadingFile)
           Padding(
             padding: const EdgeInsets.only(top: 15.0),
             child: Text(
               readingProvider.operationError!,
-              style: const TextStyle(color: Colors.red, fontSize: 14),
+              style: TextStyle(color: errorColor, fontSize: 14),
               textAlign: TextAlign.center,
             ),
           ),
-
-        // Kelime sayısı sadece dosya yüklendikten sonra ve hata yoksa gösterilir.
         if (readingProvider.totalWordCount > 0 &&
             !readingProvider.isLoadingFile &&
             readingProvider.operationError == null)
           Padding(
-            padding: const EdgeInsets.only(top: 20.0),
+            padding: const EdgeInsets.only(top: 25.0),
             child: Text(
-              "Toplam Eklenen Kelime Sayısı: ${readingProvider.totalWordCount}",
-              style: const TextStyle(
-                fontSize: 18,
+              "Toplam Eklenen Kelime: ${readingProvider.totalWordCount}",
+              style: TextStyle(
+                fontSize: 20,
                 fontWeight: FontWeight.bold,
-                color: Colors.green,
+                color: Colors.green.shade700,
               ),
               textAlign: TextAlign.center,
             ),
@@ -345,16 +461,15 @@ class _StartReadPageState extends State<StartReadPage> {
         else if (readingProvider.totalWordCount == 0 &&
             !readingProvider.isLoadingFile &&
             readingProvider.operationError == null)
-          const Padding(
-            padding: EdgeInsets.only(top: 20.0),
+          Padding(
+            padding: const EdgeInsets.only(top: 20.0),
             child: Text(
               "Henüz kelime eklenmedi.",
-              style: TextStyle(fontSize: 16, color: Colors.grey),
+              style: TextStyle(fontSize: 16, color: subtleTextColor),
               textAlign: TextAlign.center,
             ),
           ),
-
-        const SizedBox(height: 35),
+        const SizedBox(height: 40),
         ElevatedButton(
           onPressed:
               canSave
@@ -368,41 +483,43 @@ class _StartReadPageState extends State<StartReadPage> {
                           content: Text(
                             "Kaydetme hatası: ${readingProvider.operationError}",
                           ),
-                          backgroundColor: Colors.red,
+                          backgroundColor: errorColor,
                         ),
                       );
                     }
                   }
                   : null,
           style: ElevatedButton.styleFrom(
-            backgroundColor: Theme.of(context).colorScheme.primary, // Ana renk
-            padding: const EdgeInsets.symmetric(vertical: 15),
+            padding: const EdgeInsets.symmetric(vertical: 18),
             textStyle: const TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,
             ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
           ),
           child:
               readingProvider.isSubmittingSession
-                  ? const SizedBox(
+                  ? SizedBox(
                     width: 24,
                     height: 24,
                     child: CircularProgressIndicator(
-                      color: Colors.white,
+                      color: onPrimaryColor,
                       strokeWidth: 3,
                     ),
                   )
                   : const Text('Okuma Sonuçlarını Gör'),
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 15),
         TextButton(
           onPressed:
               readingProvider.isSubmittingSession
                   ? null
                   : () => readingProvider.resetTimer(),
-          child: const Text(
+          child: Text(
             "Okuma Seansını İptal Et",
-            style: TextStyle(color: Colors.redAccent, fontSize: 15),
+            style: TextStyle(color: errorColor.withOpacity(0.9), fontSize: 16),
           ),
         ),
       ],
@@ -412,31 +529,44 @@ class _StartReadPageState extends State<StartReadPage> {
   Widget _buildSessionResultView(
     BuildContext context,
     ReadingProvider readingProvider,
+    Color primaryColor,
+    Color onPrimaryColor,
+    Color secondaryTextColor,
+    Color cardBgColor,
   ) {
     final result = readingProvider.sessionResult!;
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const Icon(Icons.check_circle_outline, color: Colors.green, size: 80),
+        Icon(
+          Icons.check_circle_outline,
+          color: Colors.green.shade600,
+          size: 80,
+        ),
         const SizedBox(height: 20),
-        Text(
+        const Text(
           "Harika İş Çıkardın!",
           style: TextStyle(
-            fontSize: 24,
+            fontSize: 26,
             fontWeight: FontWeight.bold,
-            color: Colors.black87,
+            color: Color(0xFF1F2937),
           ),
           textAlign: TextAlign.center,
         ),
-        const SizedBox(height: 25),
+        const SizedBox(height: 30),
         Card(
-          elevation: 2,
+          elevation: 4,
+          shadowColor: Colors.grey.withOpacity(0.3),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(15),
           ),
+          color: cardBgColor, // Temadan gelen kart rengi (genellikle beyaz)
           child: Padding(
-            padding: const EdgeInsets.all(20.0),
+            padding: const EdgeInsets.symmetric(
+              horizontal: 20.0,
+              vertical: 25.0,
+            ),
             child: Column(
               children: [
                 _buildResultRow(
@@ -444,47 +574,55 @@ class _StartReadPageState extends State<StartReadPage> {
                   "${result.wordCount} kelime",
                 ),
                 _buildResultRow("Toplam Okuma Süresi:", result.duration),
-                const SizedBox(height: 10),
-                Divider(),
-                const SizedBox(height: 10),
+                const SizedBox(height: 15),
+                Divider(color: Colors.grey.shade300),
+                const SizedBox(height: 15),
                 Text(
                   "Okuma Hızınız",
                   style: TextStyle(
-                    fontSize: 18,
-                    color: Theme.of(context).colorScheme.primary,
-                    fontWeight: FontWeight.w500,
+                    fontSize: 20,
+                    color: primaryColor,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
                 Text(
                   "${result.speed} K/Dk",
                   style: TextStyle(
-                    fontSize: 40,
+                    fontSize: 52,
                     fontWeight: FontWeight.bold,
-                    color: Theme.of(context).colorScheme.primary,
+                    color: primaryColor,
+                    letterSpacing: 1.5,
                   ),
                 ),
               ],
             ),
           ),
         ),
-        const SizedBox(height: 30),
+        const SizedBox(height: 35),
         ElevatedButton(
           onPressed: () => readingProvider.resetTimer(),
           style: ElevatedButton.styleFrom(
-            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 24),
+            padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
+            textStyle: const TextStyle(
+              fontSize: 17,
+              fontWeight: FontWeight.w600,
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
           ),
-          child: const Text(
-            'Yeni Okuma Seansı Başlat',
-            style: TextStyle(fontSize: 16),
-          ),
+          child: const Text('Yeni Okuma Seansı Başlat'),
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 12),
         TextButton(
           onPressed: () {
-            readingProvider.resetTimer(); // Provider'ı sıfırla
+            readingProvider.resetTimer();
             Navigator.pop(context);
           },
-          child: const Text("Ana Sayfaya Dön", style: TextStyle(fontSize: 15)),
+          child: Text(
+            "Ana Sayfaya Dön",
+            style: TextStyle(fontSize: 16, color: secondaryTextColor),
+          ),
         ),
       ],
     );
@@ -492,20 +630,20 @@ class _StartReadPageState extends State<StartReadPage> {
 
   Widget _buildResultRow(String label, String value) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6.0),
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(
             label,
-            style: TextStyle(fontSize: 16, color: Colors.grey.shade700),
+            style: TextStyle(fontSize: 17, color: Colors.grey.shade800),
           ),
           Text(
             value,
-            style: TextStyle(
-              fontSize: 16,
+            style: const TextStyle(
+              fontSize: 17,
               fontWeight: FontWeight.w500,
-              color: Colors.black87,
+              color: Color(0xFF1F2937),
             ),
           ),
         ],

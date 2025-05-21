@@ -12,8 +12,9 @@ import 'features/user_features/library/state_management/library_provider.dart';
 import 'features/mentor_features/tips_mentor/state_management/tip_provider.dart';
 import 'features/course/state_management/course_provider.dart';
 import 'features/user_features/reading_session/state_management/reading_provider.dart';
-// YENİ IMPORT (DashboardProvider)
-import 'features/user_features/dashboard/state_management/dashboard_provider.dart'; // Bu yolun doğru olduğundan emin olun
+import 'features/user_features/dashboard/state_management/dashboard_provider.dart';
+// YENİ IMPORT (VocabularyProvider)
+import 'features/user_features/vocabulary_practice/state_management/vocabulary_provider.dart'; // Bu yolun doğru olduğundan emin olun
 
 class MyHttpOverrides extends HttpOverrides {
   @override
@@ -61,18 +62,25 @@ void main() {
               ),
           update: (context, auth, previous) => ReadingProvider(auth),
         ),
-        // --- YENİ DashboardProvider EKLEMESİ ---
         ChangeNotifierProxyProvider<AuthProvider, DashboardProvider>(
           create:
               (context) => DashboardProvider(
                 Provider.of<AuthProvider>(context, listen: false),
               ),
-          update: (context, auth, previousDashboardProvider) {
-            // AuthProvider değiştiğinde DashboardProvider'ı yeni auth ile güncelle.
-            return DashboardProvider(auth);
+          update: (context, auth, previous) => DashboardProvider(auth),
+        ),
+        // --- YENİ VocabularyProvider EKLEMESİ ---
+        ChangeNotifierProxyProvider<AuthProvider, VocabularyProvider>(
+          create:
+              (context) => VocabularyProvider(
+                Provider.of<AuthProvider>(context, listen: false),
+              ),
+          update: (context, auth, previousVocabularyProvider) {
+            // AuthProvider değiştiğinde VocabularyProvider'ı yeni auth ile güncelle.
+            return VocabularyProvider(auth);
           },
         ),
-        // --- BİTİŞ: DashboardProvider EKLEMESİ ---
+        // --- BİTİŞ: VocabularyProvider EKLEMESİ ---
       ],
       child: const MainApp(),
     ),
