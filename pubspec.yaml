@@ -16,7 +16,7 @@ dependencies:
   intl: 0.19.0
   # file_picker: ^5.5.0
   image_picker: ^1.0.4
-  stop_watch_timer: ^2.0.0 # Bu da güncel olsun (bir önceki cevaptaki gibi)
+  stop_watch_timer: ^2.0.0
   fl_chart: ^0.68.0
   url_launcher: ^6.2.5
   video_player: ^2.8.6  

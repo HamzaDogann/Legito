@@ -415,10 +415,12 @@ class _PublicHomeScreenState extends State<PublicHomeScreen> {
           backgroundGradient: PublicHomeScreen.blueGradient,
           imagePath: 'assets/images/notepad.png',
           imageHeight: 115,
-          onTap:
-              () => ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text("Bu özellik yakında!")),
-              ),
+          onTap: () {
+            Navigator.pushNamed(
+              context,
+              AppRoutes.vocabularyPractice,
+            ); // <<< YENİ ROTA KULLANILDI
+          },
         ),
         buildGridItem(
           title: 'Okumaya\nBaşla',

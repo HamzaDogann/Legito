@@ -1,4 +1,5 @@
 // lib/core/navigation/route_generator.dart
+
 import 'package:flutter/material.dart';
 import 'app_routes.dart';
 
@@ -29,6 +30,8 @@ import '../../features/user_features/library/screens/LibraryPage.dart';
 import '../../features/user_features/techniques_user/screens/TechniquesPage.dart';
 import '../../features/user_features/techniques_user/screens/LessonDetailPage.dart';
 import '../../features/user_features/reading_session/screens/StartReadPage.dart';
+// YENİ EKRAN IMPORTU
+import '../../features/user_features/vocabulary_practice/screens/VocabularyPracticePage.dart';
 import '../../features/user_features/support_user/screens/SupportPage.dart';
 import '../../features/user_features/support_user/screens/SearchMentorPage.dart';
 import '../../features/user_features/support_user/screens/ChatPage.dart'
@@ -48,6 +51,7 @@ class RouteGenerator {
     print("RouteGenerator: Rota isteniyor -> ${settings.name}");
 
     switch (settings.name) {
+      // Auth & Common
       case AppRoutes.splash:
         return MaterialPageRoute(builder: (_) => const SplashScreen());
       case AppRoutes.login:
@@ -89,11 +93,17 @@ class RouteGenerator {
         return _errorRoute(
           message: 'Ders detay argümanları eksik veya geçersiz.',
         );
-      case AppRoutes.startReadPage: // <<< YENİ CASE
-        // final startReadArgs = args as StartReadArgs?; // Eğer argüman alacaksa
+      case AppRoutes.startReadPage:
+        return MaterialPageRoute(builder: (_) => const StartReadPage());
+
+      // YENİ CASE EKLENDİ
+      case AppRoutes.vocabularyPractice:
+        // final vocabularyArgs = args as VocabularyPracticeArgs?; // Eğer argüman alacaksa
         return MaterialPageRoute(
-          builder: (_) => const StartReadPage(/*args: startReadArgs*/),
+          builder:
+              (_) => const VocabularyPracticePage(/*args: vocabularyArgs*/),
         );
+
       case AppRoutes.supportUser:
         return MaterialPageRoute(builder: (_) => const SupportPage());
       case AppRoutes.searchMentor:

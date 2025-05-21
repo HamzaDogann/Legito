@@ -7,7 +7,7 @@ class AppRoutes {
   static const String register = '/register';
   static const String membershipAgreement = '/membership-agreement';
 
-  // Common Screens (Accessible after login, potentially by multiple roles)
+  // Common Screens
   static const String publicHome = '/home';
   static const String account = '/account';
   static const String accountSettings = '/account-settings';
@@ -21,7 +21,9 @@ class AppRoutes {
   static const String library = '/user/library';
   static const String techniquesUser = '/user/techniques';
   static const String lessonDetailUser = '/user/lesson-detail';
-  static const String startReadPage = '/user/start-read'; // <<< YENİ EKLENDİ
+  static const String startReadPage = '/user/start-read';
+  static const String vocabularyPractice =
+      '/user/vocabulary-practice'; // <<< YENİ KELİMELERİ KAVRA ROTASI
   static const String supportUser = '/user/support';
   static const String searchMentor = '/user/search-mentor';
   static const String chatWithMentor = '/user/chat';

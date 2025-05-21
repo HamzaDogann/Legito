@@ -11,8 +11,9 @@ import 'state_management/auth_provider.dart';
 import 'features/user_features/library/state_management/library_provider.dart';
 import 'features/mentor_features/tips_mentor/state_management/tip_provider.dart';
 import 'features/course/state_management/course_provider.dart';
-// YENİ IMPORT (ReadingProvider)
-import 'features/user_features/reading_session/state_management/reading_provider.dart'; // Doğru yolu kontrol edin
+import 'features/user_features/reading_session/state_management/reading_provider.dart';
+// YENİ IMPORT (VocabularyProvider)
+import 'features/user_features/vocabulary_practice/state_management/vocabulary_provider.dart'; // Bu yolun doğru olduğundan emin olun
 
 class MyHttpOverrides extends HttpOverrides {
   @override
@@ -53,20 +54,25 @@ void main() {
               ),
           update: (context, auth, previous) => CourseProvider(auth),
         ),
-        // --- YENİ ReadingProvider EKLEMESİ ---
         ChangeNotifierProxyProvider<AuthProvider, ReadingProvider>(
           create:
               (context) => ReadingProvider(
                 Provider.of<AuthProvider>(context, listen: false),
               ),
-          update: (context, auth, previousReadingProvider) {
-            // AuthProvider değiştiğinde ReadingProvider'ı yeni auth ile güncelle.
-            // ReadingProvider'ın constructor'ı AuthProvider'ı aldığı için bu şekilde
-            // yeni bir instance oluşturmak, state'in doğru yönetilmesini sağlar.
-            return ReadingProvider(auth);
+          update: (context, auth, previous) => ReadingProvider(auth),
+        ),
+        // --- YENİ VocabularyProvider EKLEMESİ ---
+        ChangeNotifierProxyProvider<AuthProvider, VocabularyProvider>(
+          create:
+              (context) => VocabularyProvider(
+                Provider.of<AuthProvider>(context, listen: false),
+              ),
+          update: (context, auth, previousVocabularyProvider) {
+            // AuthProvider değiştiğinde VocabularyProvider'ı yeni auth ile güncelle.
+            return VocabularyProvider(auth);
           },
         ),
-        // --- BİTİŞ: ReadingProvider EKLEMESİ ---
+        // --- BİTİŞ: VocabularyProvider EKLEMESİ ---
       ],
       child: const MainApp(),
     ),

@@ -48,4 +48,7 @@ class ApiConstants {
   static const String uploadReadingImageEndpoint = "/Reading/Image"; // POST
   static const String uploadReadingPdfEndpoint = "/Reading/Pdf"; // POST
   static const String createReadingSessionEndpoint = "/Reading/Create"; // POST
+
+  //! Word (Kelime Alıştırması)
+  static const String getRandomWordsEndpoint = "/Word/Random";
 }
