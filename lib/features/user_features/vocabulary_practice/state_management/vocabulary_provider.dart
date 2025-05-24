@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:stop_watch_timer/stop_watch_timer.dart';
-import '../../../../state_management/auth_provider.dart';
+import '../../../../state_management/auth_provider.dart'; // AuthProvider importu
 import '../services/word_service.dart';
 import '../models/word_item_dto.dart';
 import '../models/word_enums.dart';
@@ -141,7 +141,7 @@ class VocabularyProvider with ChangeNotifier {
 
   void _startWordDisplay() {
     if (_currentWords.isEmpty || _selectedLevel == null) {
-      _finishPractice();
+      _finishPractice(); // Bu durumda bile _finishPractice kontrolü devreye girecek.
       return;
     }
 
@@ -172,7 +172,7 @@ class VocabularyProvider with ChangeNotifier {
       "Word Display Interval: $displayIntervalMilliseconds ms for WPM: ${_selectedLevel!.wpm}",
     );
 
-    _moveToNextWord();
+    _moveToNextWord(); // İlk kelimeyi hemen göster
 
     _wordDisplayTimer = Timer.periodic(
       Duration(milliseconds: displayIntervalMilliseconds),
@@ -180,6 +180,8 @@ class VocabularyProvider with ChangeNotifier {
         if (_status != VocabPracticeStatus.displayingWords ||
             !_sessionStopWatch.isRunning) {
           timer.cancel();
+          // Zamanlayıcı durduğunda ve hala kelime gösterme modundaysak bitir.
+          // Bu, goBackToLevelSelection çağrıldığında _status değişeceği için sorun olmamalı.
           if (!_sessionStopWatch.isRunning &&
               _status == VocabPracticeStatus.displayingWords) {
             _finishPractice();
@@ -196,8 +198,11 @@ class VocabularyProvider with ChangeNotifier {
     if (_currentWordIndex < _currentWords.length) {
       _displayedWord = _currentWords[_currentWordIndex].name;
     } else {
+      // Kelimeler bitti ama zamanlayıcı hala çalışıyorsa, zamanlayıcının bitmesini bekle.
+      // Eğer kelimeler bittiği anda pratiği bitirmek isterseniz, burada _finishPractice() çağrılabilir.
       _displayedWord = "";
-      _wordDisplayTimer?.cancel();
+      _wordDisplayTimer
+          ?.cancel(); // Kelimeler bittiği için kelime gösterme timer'ını durdur.
     }
     notifyListeners();
   }
@@ -232,8 +237,12 @@ class VocabularyProvider with ChangeNotifier {
           .round()
           .clamp(50, 5000);
 
-      _wordDisplayTimer?.cancel();
+      _wordDisplayTimer?.cancel(); // Önceki timer'ı iptal et (eğer varsa)
+
+      // Eğer duraklatıldığında kelime listesinin sonuna gelinmişse, yeni timer başlatma.
       if (_currentWordIndex >= _currentWords.length && _displayedWord.isEmpty) {
+        // Kelimeler zaten bitmişse ve son kelime boşsa, bir şey yapma.
+        // Zamanlayıcı (StopWatch) devam eder, bittiğinde _finishPractice çağrılır.
         return;
       }
 
@@ -255,7 +264,18 @@ class VocabularyProvider with ChangeNotifier {
   }
 
   void _finishPractice() {
-    if (_status == VocabPracticeStatus.results) return;
+    // EĞER DURUM ZATEN SONUÇLARSA VEYA SEVİYE SEÇİMİNE GEÇİLMİŞSE, TEKRAR SONUÇLARA GEÇME.
+    if (_status == VocabPracticeStatus.results ||
+        _status == VocabPracticeStatus.levelSelection) {
+      print(
+        "VocabularyProvider: _finishPractice çağrıldı ancak durum zaten '$_status'. Sonuçlara geçiş engellendi.",
+      );
+      // Bu durumda bile zamanlayıcıların durduğundan emin olalım.
+      _sessionStopWatch.onStopTimer();
+      _wordDisplayTimer?.cancel();
+      return;
+    }
+
     print(
       "VocabularyProvider: Alıştırma bitti. Son index: $_currentWordIndex, Toplam kelime: ${_currentWords.length}",
     );
@@ -268,13 +288,30 @@ class VocabularyProvider with ChangeNotifier {
 
   void _calculateWordTypeCounts() {
     _wordTypeCounts.clear();
-    int wordsActuallyDisplayedCount = _currentWordIndex + 1;
+    // Gösterilen kelime sayısı, _currentWordIndex'in bir fazlasıdır (0 tabanlı olduğu için).
+    // Ancak _currentWordIndex, listenin boyutunu aşabilir eğer _moveToNextWord çağrılmaya devam ederse.
+    // Bu yüzden gerçekten _currentWords listesi içinde kalan indisleri saymalıyız.
+    int wordsActuallyDisplayedCount =
+        _currentWordIndex + 1; // Potansiyel olarak gösterilenler
+
+    // Eğer _currentWordIndex listenin son elemanını işaret ediyorsa (length - 1),
+    // o zaman wordsActuallyDisplayedCount = length olur.
+    // Eğer _currentWordIndex, listenin boyutunu aşmışsa (örneğin son kelime gösterildikten sonra bir daha _moveToNextWord çağrılırsa),
+    // bunu _currentWords.length ile sınırla.
     if (wordsActuallyDisplayedCount > _currentWords.length) {
       wordsActuallyDisplayedCount = _currentWords.length;
     }
+    if (wordsActuallyDisplayedCount < 0)
+      wordsActuallyDisplayedCount = 0; // Negatif olamaz.
 
     print("Hesaplanacak kelime adedi: $wordsActuallyDisplayedCount");
-    for (int i = 0; i < wordsActuallyDisplayedCount; i++) {
+    for (
+      int i = 0;
+      i < wordsActuallyDisplayedCount && i < _currentWords.length;
+      i++
+    ) {
+      // i < _currentWords.length ek kontrolü, wordsActuallyDisplayedCount'ın
+      // _currentWords boşken bile 1 olabileceği durumlar için (currentWordIndex = -1 iken)
       final wordDto = _currentWords[i];
       if (wordDto.type >= 0 && wordDto.type < ApiWordType.values.length) {
         ApiWordType type = ApiWordType.values[wordDto.type];
@@ -296,10 +333,11 @@ class VocabularyProvider with ChangeNotifier {
   }
 
   void goBackToLevelSelection() {
-    print("VocabularyProvider: Seviye seçimine dönülüyor.");
+    print(
+      "VocabularyProvider: Seviye seçimine dönülüyor. Mevcut durum: $_status",
+    );
     _status = VocabPracticeStatus.levelSelection;
     _wordDisplayTimer?.cancel();
-
     _sessionStopWatch.onStopTimer();
     _resetAndPrepareStopWatch();
 

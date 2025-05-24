@@ -90,6 +90,8 @@ class _VocabularyPracticePageState extends State<VocabularyPracticePage> {
             (route) => false,
           );
         } else {
+          // Sayfa ilk yüklendiğinde veya kullanıcı kimliği doğrulandıktan sonra
+          // doğrudan seviye seçimine git veya provider'ın durumunu sıfırla.
           Provider.of<VocabularyProvider>(
             context,
             listen: false,
@@ -118,10 +120,14 @@ class _VocabularyPracticePageState extends State<VocabularyPracticePage> {
       builder: (context, vocabProvider, child) {
         return WillPopScope(
           onWillPop: () async {
+            // Android sistem geri tuşu basıldığında
+            // Eğer kelime alıştırması ekranında (veya benzeri bir ara ekranda) ise,
+            // doğrudan seviye seçimine dön.
             if (vocabProvider.status != VocabPracticeStatus.levelSelection) {
               vocabProvider.goBackToLevelSelection();
-              return false;
+              return false; // Varsayılan geri işlemini engelle, çünkü biz yönettik.
             }
+            // Eğer zaten seviye seçim ekranındaysa, varsayılan geri işlemine izin ver.
             return true;
           },
           child: Scaffold(
@@ -131,17 +137,22 @@ class _VocabularyPracticePageState extends State<VocabularyPracticePage> {
               leading: IconButton(
                 icon: const Icon(Icons.arrow_back),
                 onPressed: () {
+                  // AppBar geri tuşuna basıldığında
+                  // Eğer kelime alıştırması ekranında (veya benzeri bir ara ekranda) ise,
+                  // doğrudan seviye seçimine dön.
                   if (vocabProvider.status !=
                       VocabPracticeStatus.levelSelection) {
                     vocabProvider.goBackToLevelSelection();
                   } else {
-                    if (Navigator.canPop(context))
+                    // Zaten seviye seçim ekranındaysa, standart pop işlemi yap veya ana sayfaya git.
+                    if (Navigator.canPop(context)) {
                       Navigator.pop(context);
-                    else
+                    } else {
                       Navigator.pushReplacementNamed(
                         context,
                         AppRoutes.publicHome,
                       );
+                    }
                   }
                 },
               ),
@@ -161,7 +172,7 @@ class _VocabularyPracticePageState extends State<VocabularyPracticePage> {
         return 'Kelimeler Yükleniyor...';
       case VocabPracticeStatus.displayingWords:
       case VocabPracticeStatus.paused:
-        return 'Kelime Alıştırması';
+        return 'Kelime Alıştırması'; // Geri butonu bu başlık ile göründüğünde seviye seçimine döner
       case VocabPracticeStatus.results:
         return 'Alıştırma Sonucu';
       case VocabPracticeStatus.error:
@@ -224,16 +235,17 @@ class _VocabularyPracticePageState extends State<VocabularyPracticePage> {
     VocabularyProvider vocabProvider,
   ) {
     Color wpmValueColor = level.tagColor;
-    if (level.tagColor == _levelGoodColor)
+    if (level.tagColor == _levelGoodColor) {
       wpmValueColor = Colors.amber.shade800;
-    else if (level.tagColor == _levelNormalColor)
+    } else if (level.tagColor == _levelNormalColor) {
       wpmValueColor = Colors.orange.shade800;
-    else if (level.tagColor == _levelLowColor)
+    } else if (level.tagColor == _levelLowColor) {
       wpmValueColor = Colors.red.shade700;
-    else if (level.tagColor == _levelGreatColor)
+    } else if (level.tagColor == _levelGreatColor) {
       wpmValueColor = Colors.green.shade700;
-    else if (level.tagColor == _levelAmazingColor)
+    } else if (level.tagColor == _levelAmazingColor) {
       wpmValueColor = Colors.purple.shade700;
+    }
 
     return Card(
       elevation: 1.5,
@@ -314,76 +326,79 @@ class _VocabularyPracticePageState extends State<VocabularyPracticePage> {
     BuildContext context,
     VocabularyProvider vocabProvider,
   ) {
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Text(
-          vocabProvider.sessionDisplayTime,
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontSize: 28,
-            fontWeight: FontWeight.w500,
-            color: Theme.of(context).colorScheme.primary,
-          ),
-        ),
-        const SizedBox(height: 40),
-        Container(
-          height: 150,
-          alignment: Alignment.center,
-          child: Text(
-            vocabProvider.displayedWord,
-            style: const TextStyle(
-              fontSize: 60,
-              fontWeight: FontWeight.bold,
-              color: _textDark,
-            ),
+    return Align(
+      alignment: const Alignment(0.0, -0.2),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            vocabProvider.sessionDisplayTime,
             textAlign: TextAlign.center,
-          ),
-        ),
-        const SizedBox(height: 50),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: [
-            ElevatedButton(
-              onPressed: vocabProvider.resumeWordDisplay,
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 24,
-                  vertical: 12,
-                ),
-              ),
-              child: Text(
-                vocabProvider.status == VocabPracticeStatus.paused
-                    ? 'Devam Et'
-                    : 'Başlat',
-                style: const TextStyle(fontSize: 16),
-              ),
-            ),
-            ElevatedButton(
-              onPressed: vocabProvider.pauseWordDisplay,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.orange.shade700,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 24,
-                  vertical: 12,
-                ),
-              ),
-              child: const Text('Duraklat', style: TextStyle(fontSize: 16)),
-            ),
-          ],
-        ),
-        const SizedBox(height: 20),
-        Center(
-          child: TextButton(
-            onPressed: () => vocabProvider.goBackToLevelSelection(),
-            child: const Text(
-              "Seviye Seçimine Dön",
-              style: TextStyle(color: Colors.redAccent, fontSize: 15),
+            style: const TextStyle(
+              fontSize: 28,
+              fontWeight: FontWeight.w500,
+              color: Colors.white,
             ),
           ),
-        ),
-      ],
+          const SizedBox(height: 40),
+          Container(
+            height: 150,
+            alignment: Alignment.center,
+            child: Text(
+              vocabProvider.displayedWord,
+              style: const TextStyle(
+                fontSize: 60,
+                fontWeight: FontWeight.bold,
+                color: _textDark,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ),
+          const SizedBox(height: 50),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              ElevatedButton(
+                onPressed: vocabProvider.resumeWordDisplay,
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 12,
+                  ),
+                ),
+                child: Text(
+                  vocabProvider.status == VocabPracticeStatus.paused
+                      ? 'Devam Et'
+                      : 'Başlat',
+                  style: const TextStyle(fontSize: 16),
+                ),
+              ),
+              ElevatedButton(
+                onPressed: vocabProvider.pauseWordDisplay,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.orange.shade700,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 12,
+                  ),
+                ),
+                child: const Text('Duraklat', style: TextStyle(fontSize: 16)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          Center(
+            child: TextButton(
+              onPressed: () => vocabProvider.goBackToLevelSelection(),
+              child: const Text(
+                "Seviye Seçimine Dön",
+                style: TextStyle(color: Colors.redAccent, fontSize: 15),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -423,6 +438,7 @@ class _VocabularyPracticePageState extends State<VocabularyPracticePage> {
     });
 
     return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 20.0),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.stretch,
