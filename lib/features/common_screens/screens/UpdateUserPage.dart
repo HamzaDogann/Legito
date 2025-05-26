@@ -133,7 +133,7 @@ class _UpdateUserPageState extends State<UpdateUserPage> {
     setState(() => _isLoading = true);
 
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    authProvider.clearOperationError();
+    authProvider.clearDisplayedError();
 
     // Formdaki o anki tüm değerleri al
     final String displayNameValue = _displayNameController.text.trim();

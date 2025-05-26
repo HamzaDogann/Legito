@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/navigation/app_routes.dart';
 import '../../../state_management/auth_provider.dart';
-import '../../mentor_features/home/models/mentor_home_args.dart'; // Mentor yönlendirmesi için
+import '../../mentor_features/home/models/mentor_home_args.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({Key? key}) : super(key: key);
@@ -16,7 +16,7 @@ class _LoginPageState extends State<LoginPage> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  bool _isLoading = false;
+  // bool _isLoading = false; // isLoading will now be managed by AuthProvider
 
   @override
   void dispose() {
@@ -26,26 +26,23 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   Future<void> _login() async {
-    FocusScope.of(context).unfocus(); // Klavye açıksa kapat
+    FocusScope.of(context).unfocus();
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    authProvider.clearDisplayedError(); // Clear previous errors
 
     if (_formKey.currentState?.validate() ?? false) {
-      setState(() => _isLoading = true);
+      // setState(() => _isLoading = true); // AuthProvider handles isLoading
 
-      final authProvider = Provider.of<AuthProvider>(context, listen: false);
       bool success = await authProvider.login(
         _emailController.text.trim(),
         _passwordController.text,
       );
 
-      if (!mounted) return; // Widget ağaçtan kaldırıldıysa işlem yapma
-
-      setState(() => _isLoading = false);
+      if (!mounted) return;
+      // setState(() => _isLoading = false); // AuthProvider handles isLoading
 
       if (success) {
-        // Yönlendirme AuthProvider'daki role göre yapılacak.
-        // Backend'den gelen rol "Member" ise ve UserRole enum'ınızda UserRole.user buna karşılık geliyorsa:
         if (authProvider.isUser()) {
-          // AuthProvider.isUser() "Member" rolünü de kontrol etmeli
           Navigator.pushNamedAndRemoveUntil(
             context,
             AppRoutes.publicHome,
@@ -61,14 +58,10 @@ class _LoginPageState extends State<LoginPage> {
               mentorName: authProvider.displayName ?? 'Mentor',
             ),
           );
-        }
-        // Diğer roller için (örn: admin) else if blokları eklenebilir.
-        else {
-          // Rol tanımlı değilse veya beklenmedik bir durumsa
-          // AuthProvider.operationError zaten set edilmiş olmalı.
-          // Bu hata LoginPage'in build metodunda gösterilecek.
-          if (mounted && authProvider.operationError == null) {
-            // Eğer özel bir hata yoksa genel mesaj
+        } else {
+          if (mounted &&
+              (authProvider.operationError == null &&
+                  (authProvider.operationErrorsList?.isEmpty ?? true))) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: const Text(
@@ -78,28 +71,62 @@ class _LoginPageState extends State<LoginPage> {
               ),
             );
           }
+          // Errors will be displayed by the Consumer
         }
       } else {
-        // Hata mesajı AuthProvider.operationError'dan alınacak,
-        // bu yüzden burada ek bir setState'e gerek yok, widget build'da gösterilecek.
-        // İsterseniz anlık bir SnackBar gösterebilirsiniz ama zaten Text olarak gösteriliyor.
-        // if (authProvider.operationError != null && mounted) {
-        //    ScaffoldMessenger.of(context).showSnackBar(
-        //     SnackBar(
-        //       content: Text(authProvider.operationError!),
-        //       backgroundColor: Theme.of(context).colorScheme.error,
-        //     ),
-        //   );
-        // }
+        // Errors will be displayed by the Consumer
       }
     }
   }
 
+  Widget _buildErrorMessages(AuthProvider auth) {
+    if (auth.isLoading) return const SizedBox.shrink();
+
+    List<Widget> errorWidgets = [];
+    if (auth.operationErrorsList?.isNotEmpty ?? false) {
+      errorWidgets.addAll(
+        auth.operationErrorsList!.map(
+          (error) => Padding(
+            padding: const EdgeInsets.only(top: 4.0),
+            child: Text(
+              error,
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.error,
+                fontSize: 14,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ),
+      );
+    } else if (auth.operationError != null) {
+      errorWidgets.add(
+        Padding(
+          padding: const EdgeInsets.only(top: 4.0),
+          child: Text(
+            auth.operationError!,
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.error,
+              fontSize: 14,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ),
+      );
+    }
+
+    if (errorWidgets.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12.0, top: 8.0),
+      child: Column(children: errorWidgets),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    // Hata mesajını AuthProvider'dan dinlemek için Consumer veya Provider.of kullanabiliriz.
-    // Provider.of kullanırsak, her build'de yeniden alınır.
-    // Consumer sadece ilgili widget'ı yeniden build eder.
+    final authProvider = Provider.of<AuthProvider>(
+      context,
+    ); // Listen to isLoading and errors
 
     return Scaffold(
       body: SafeArea(
@@ -113,7 +140,7 @@ class _LoginPageState extends State<LoginPage> {
                 const SizedBox(height: 32),
                 Center(
                   child: Image.asset(
-                    'assets/images/Legito.png', // Path'in doğru olduğundan emin olun
+                    'assets/images/Legito.png',
                     width: 160,
                     height: 80,
                     fit: BoxFit.contain,
@@ -124,8 +151,13 @@ class _LoginPageState extends State<LoginPage> {
                   'Giriş Yap',
                   style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
                 ),
-                const SizedBox(height: 48),
+                const SizedBox(height: 32), // Reduced space
+                // Consumer to display API errors
+                Consumer<AuthProvider>(
+                  builder: (context, auth, _) => _buildErrorMessages(auth),
+                ),
 
+                // const SizedBox(height: 8), // Space after errors if any
                 TextFormField(
                   controller: _emailController,
                   decoration: const InputDecoration(
@@ -134,17 +166,14 @@ class _LoginPageState extends State<LoginPage> {
                   ),
                   keyboardType: TextInputType.emailAddress,
                   validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
+                    if (value == null || value.trim().isEmpty)
                       return 'Lütfen e-posta adresinizi girin.';
-                    }
-                    if (!value.contains('@') || !value.contains('.')) {
+                    if (!value.contains('@') || !value.contains('.'))
                       return 'Geçerli bir e-posta adresi girin.';
-                    }
                     return null;
                   },
                 ),
                 const SizedBox(height: 16),
-
                 TextFormField(
                   controller: _passwordController,
                   obscureText: true,
@@ -153,38 +182,18 @@ class _LoginPageState extends State<LoginPage> {
                     prefixIcon: Icon(Icons.lock_outline),
                   ),
                   validator: (value) {
-                    if (value == null || value.isEmpty) {
+                    if (value == null || value.isEmpty)
                       return 'Lütfen şifrenizi girin.';
-                    }
                     return null;
                   },
                 ),
-                const SizedBox(height: 12),
-                // Hata mesajını AuthProvider'dan göster
-                Consumer<AuthProvider>(
-                  builder: (context, auth, child) {
-                    if (auth.operationError != null && !_isLoading) {
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 12.0),
-                        child: Text(
-                          auth.operationError!,
-                          style: TextStyle(
-                            color: Theme.of(context).colorScheme.error,
-                            fontSize: 14,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      );
-                    }
-                    return const SizedBox.shrink(); // Hata yoksa boş widget
-                  },
-                ),
-                const SizedBox(height: 12),
-
+                const SizedBox(
+                  height: 24,
+                ), // Increased space for error messages
                 SizedBox(
                   width: double.infinity,
                   child:
-                      _isLoading
+                      authProvider.isLoading
                           ? const Center(child: CircularProgressIndicator())
                           : ElevatedButton(
                             style: ElevatedButton.styleFrom(
@@ -206,14 +215,12 @@ class _LoginPageState extends State<LoginPage> {
                           ),
                 ),
                 const SizedBox(height: 24),
-
                 GestureDetector(
                   onTap:
-                      _isLoading
+                      authProvider.isLoading
                           ? null
-                          : () {
-                            Navigator.pushNamed(context, AppRoutes.register);
-                          },
+                          : () =>
+                              Navigator.pushNamed(context, AppRoutes.register),
                   child: const Text.rich(
                     TextSpan(
                       text: 'Bir hesabın yok mu? ',
@@ -235,7 +242,7 @@ class _LoginPageState extends State<LoginPage> {
                 const SizedBox(height: 16),
                 TextButton(
                   onPressed:
-                      _isLoading
+                      authProvider.isLoading
                           ? null
                           : () {
                             ScaffoldMessenger.of(context).showSnackBar(

@@ -53,7 +53,7 @@ class _AccountSettingPageState extends State<AccountSettingPage> {
         });
 
         final authProvider = Provider.of<AuthProvider>(context, listen: false);
-        authProvider.clearOperationError();
+        authProvider.clearDisplayedError();
         bool success = await authProvider.updateUserPhoto(_pickedImageFile!);
 
         if (mounted) {

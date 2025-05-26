@@ -7,7 +7,7 @@ import '../models/login_response_model.dart';
 import '../models/register_request_model.dart';
 import '../models/signup_response_model.dart';
 
-// SignOut için response model
+// SignOutResponseModel - ensure it also parses errors list
 class SignOutResponseModel {
   final bool isSuccess;
   final String? message;
@@ -27,10 +27,29 @@ class SignOutResponseModel {
         (json['statusCode'] == 200 || json['statusCode'] == 204) ||
             (json.isEmpty &&
                 (json['statusCode'] == null || json['statusCode'] == 204));
+
+    List<String>? errorsList;
+    if (json['errors'] != null) {
+      if (json['errors'] is List) {
+        errorsList = List<String>.from(json['errors'].map((e) => e.toString()));
+      } else if (json['errors'] is Map) {
+        errorsList = [];
+        (json['errors'] as Map).forEach((key, value) {
+          if (value is List) {
+            errorsList!.addAll(value.map((e) => e.toString()));
+          } else {
+            errorsList!.add(value.toString());
+          }
+        });
+      } else {
+        errorsList = [json['errors'].toString()];
+      }
+    }
+
     return SignOutResponseModel(
       isSuccess: success,
       message: json['message'] as String?,
-      errors: json['errors'] != null ? List<String>.from(json['errors']) : null,
+      errors: errorsList,
       statusCode: json['statusCode'] as int?,
     );
   }
@@ -50,6 +69,28 @@ class SignOutResponseModel {
 }
 
 class AuthService {
+  // Helper function to parse errors robustly from API response
+  List<String>? _parseErrors(Map<String, dynamic> responseData) {
+    if (responseData['errors'] == null) return null;
+
+    if (responseData['errors'] is List) {
+      return List<String>.from(responseData['errors'].map((e) => e.toString()));
+    } else if (responseData['errors'] is Map) {
+      List<String> errors = [];
+      (responseData['errors'] as Map).forEach((key, value) {
+        if (value is List) {
+          errors.addAll(value.map((e) => e.toString()));
+        } else {
+          errors.add(value.toString());
+        }
+      });
+      return errors.isNotEmpty ? errors : null;
+    } else if (responseData['errors'] is String) {
+      return [responseData['errors'].toString()];
+    }
+    return null; // Should not happen if 'errors' is present and not null
+  }
+
   Future<LoginResponseModel> signInWithEmail(
     String email,
     String password,
@@ -66,7 +107,10 @@ class AuthService {
       final Map<String, dynamic> responseData = jsonDecode(
         utf8.decode(response.bodyBytes),
       );
-      if (response.statusCode == 200) {
+
+      if (response.statusCode == 200 &&
+          (responseData['isSuccess'] == true ||
+              responseData['data']?['accessToken'] != null)) {
         return LoginResponseModel.fromJson(responseData);
       } else {
         String errorMessage =
@@ -74,14 +118,9 @@ class AuthService {
             responseData['error'] ??
             responseData['title'] ??
             "Sunucu hatası: ${response.statusCode}";
-        List<String>? errors;
-        if (responseData['errors'] is List)
-          errors = List<String>.from(responseData['errors']);
-        else if (responseData['errors'] is Map) {
-          errors = [];
-          (responseData['errors'] as Map).forEach((key, value) {
-            if (value is List) errors?.addAll(value.cast<String>());
-          });
+        List<String>? errors = _parseErrors(responseData);
+        if (errors?.isNotEmpty ?? false) {
+          errorMessage = errors!.first; // Use first specific error if available
         }
         return LoginResponseModel.failure(
           errorMessage,
@@ -111,7 +150,7 @@ class AuthService {
       final Map<String, dynamic> responseData = jsonDecode(
         utf8.decode(response.bodyBytes),
       );
-      if (response.statusCode == 200) {
+      if (response.statusCode == 200 && responseData['isSuccess'] == true) {
         return UserInfoResponseModel.fromJson(responseData);
       } else {
         String errorMessage =
@@ -119,14 +158,9 @@ class AuthService {
             responseData['error'] ??
             responseData['title'] ??
             "Kullanıcı bilgileri alınırken sunucu hatası: ${response.statusCode}";
-        List<String>? errors;
-        if (responseData['errors'] is List)
-          errors = List<String>.from(responseData['errors']);
-        else if (responseData['errors'] is Map) {
-          errors = [];
-          (responseData['errors'] as Map).forEach((key, value) {
-            if (value is List) errors?.addAll(value.cast<String>());
-          });
+        List<String>? errors = _parseErrors(responseData);
+        if (errors?.isNotEmpty ?? false) {
+          errorMessage = errors!.first;
         }
         return UserInfoResponseModel.failure(
           errorMessage,
@@ -154,7 +188,9 @@ class AuthService {
       final Map<String, dynamic> responseData = jsonDecode(
         utf8.decode(response.bodyBytes),
       );
-      if (response.statusCode == 200 || response.statusCode == 201) {
+
+      if ((response.statusCode == 200 || response.statusCode == 201) &&
+          responseData['isSuccess'] == true) {
         return SignUpResponseModel.fromJson(responseData);
       } else {
         String errorMessage =
@@ -162,30 +198,25 @@ class AuthService {
             responseData['error'] ??
             responseData['title'] ??
             "Kayıt sırasında sunucu hatası: ${response.statusCode}";
-        List<String>? errorsList;
-        if (responseData['errors'] is List)
-          errorsList = List<String>.from(responseData['errors']);
-        else if (responseData['errors'] is Map) {
-          errorsList = [];
-          (responseData['errors'] as Map).forEach((key, value) {
-            if (value is List) errorsList?.addAll(value.cast<String>());
-          });
-          if (errorsList.isNotEmpty &&
-              (errorMessage == responseData['title'] ||
-                  errorMessage.contains("sunucu hatası")))
-            errorMessage = errorsList.join(" ");
+        List<String>? errors = _parseErrors(responseData);
+        // If errors list is not empty and general message is generic, override general message
+        if (errors?.isNotEmpty ?? false) {
+          errorMessage =
+              errors!.first; // Prioritize the first specific error message
         }
-        // SignUpResponseModel.failure tanımınızın errors ve statusCode parametrelerini desteklediğinden emin olun.
-        return SignUpResponseModel.failure(errorMessage);
+        return SignUpResponseModel.failure(
+          errorMessage,
+          errors: errors,
+          statusCode: response.statusCode,
+        );
       }
-    } catch (e, s) {
+    } catch (e) {
       return SignUpResponseModel.failure(
         "Kayıt sırasında bağlantı hatası veya sunucuya ulaşılamadı.",
       );
     }
   }
 
-  // signOut metodu refreshToken alacak şekilde güncellendi
   Future<SignOutResponseModel> signOut(
     String refreshToken, {
     String? accessTokenForHeader,
@@ -193,24 +224,12 @@ class AuthService {
     final Uri uri = Uri.parse(
       ApiConstants.baseUrl + ApiConstants.signOutEndpoint,
     );
-    print(
-      'AuthService: Çıkış (SignOut) isteği gönderiliyor: ${uri.toString()}',
-    );
-
-    // API refreshToken bekliyor. Body'deki anahtarın 'token' mı 'refreshToken' mı olduğunu kontrol edin.
-    // Şimdilik 'token' varsayıyoruz.
     final Map<String, String> requestBody = {'token': refreshToken};
-    print(
-      'AuthService: SignOut için gönderilen body (refreshToken içeren): ${jsonEncode(requestBody)}',
-    );
-
     Map<String, String> headers = {
       'Content-Type': 'application/json; charset=utf-8',
     };
     if (accessTokenForHeader != null) {
-      // Eğer API signOut için accessToken header'ı da istiyorsa
       headers['Authorization'] = 'Bearer $accessTokenForHeader';
-      print('AuthService: SignOut için Authorization header kullanılıyor.');
     }
 
     try {
@@ -219,10 +238,6 @@ class AuthService {
         headers: headers,
         body: jsonEncode(requestBody),
       );
-
-      print('AuthService: SignOut cevabı statusCode: ${response.statusCode}');
-      print('AuthService: SignOut cevabı body: ${response.body}');
-
       if (response.statusCode == 200 || response.statusCode == 204) {
         if (response.body.isNotEmpty) {
           try {
@@ -247,7 +262,6 @@ class AuthService {
       } else {
         String errorMessage = "Çıkış yapılırken sunucu hatası oluştu.";
         List<String>? errors;
-        int? statusCode = response.statusCode;
         if (response.body.isNotEmpty) {
           try {
             final Map<String, dynamic> errorData = jsonDecode(
@@ -256,36 +270,26 @@ class AuthService {
             errorMessage =
                 errorData['message'] ??
                 errorData['title'] ??
-                "Çıkış hatası: $statusCode";
-            if (errorData['errors'] is List) {
-              errors = List<String>.from(errorData['errors']);
-              if (errors.isNotEmpty) errorMessage = errors.join(" ");
-            } else if (errorData['errors'] is Map) {
-              errors = [];
-              (errorData['errors'] as Map).forEach((key, value) {
-                if (value is List)
-                  errors?.addAll(value.cast<String>());
-                else if (value is String)
-                  errors?.add(value);
-              });
-              if (errors.isNotEmpty) errorMessage = errors.join(" ");
+                "Çıkış hatası: ${response.statusCode}";
+            errors = _parseErrors(errorData);
+            if (errors?.isNotEmpty ?? false) {
+              errorMessage = errors!.first;
             }
           } catch (e) {
             errorMessage =
-                "Çıkış yapılırken sunucu yanıtı okunamadı: $statusCode. Yanıt: ${response.body.substring(0, response.body.length > 100 ? 100 : response.body.length)}";
+                "Çıkış yapılırken sunucu yanıtı okunamadı: ${response.statusCode}. Yanıt: ${response.body.substring(0, response.body.length > 100 ? 100 : response.body.length)}";
           }
         } else {
           errorMessage =
-              "Çıkış yapılırken sunucu hatası: $statusCode (yanıt boş).";
+              "Çıkış yapılırken sunucu hatası: ${response.statusCode} (yanıt boş).";
         }
         return SignOutResponseModel.failure(
           errorMessage,
           errors: errors,
-          statusCode: statusCode,
+          statusCode: response.statusCode,
         );
       }
     } catch (e) {
-      print('AuthService signOut Hata: $e');
       return SignOutResponseModel.failure(
         "Çıkış yapılırken bağlantı hatası: $e",
       );

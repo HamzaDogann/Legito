@@ -37,7 +37,7 @@ class _UpdatePasswordPageState extends State<UpdatePasswordPage> {
     setState(() => _isLoading = true);
 
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    authProvider.clearOperationError();
+    authProvider.clearDisplayedError();
 
     bool success = await authProvider.updateUserPassword(
       currentPassword: _currentPasswordController.text,
@@ -178,13 +178,34 @@ class _UpdatePasswordPageState extends State<UpdatePasswordPage> {
                     child: OutlinedButton(
                       onPressed:
                           _isLoading ? null : () => Navigator.pop(context),
-                      child: const Text('İptal'),
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: Colors.grey),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                      child: const Text(
+                        'İptal',
+                        style: TextStyle(
+                          color: Colors.black87,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                     ),
                   ),
                   const SizedBox(width: 16),
                   Expanded(
                     child: ElevatedButton(
                       onPressed: _isLoading ? null : _submitUpdatePassword,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFFF8128), // turuncu
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
                       child:
                           _isLoading
                               ? const SizedBox(
@@ -195,7 +216,14 @@ class _UpdatePasswordPageState extends State<UpdatePasswordPage> {
                                   strokeWidth: 2.0,
                                 ),
                               )
-                              : const Text('Kaydet'),
+                              : const Text(
+                                'Kaydet',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
                     ),
                   ),
                 ],

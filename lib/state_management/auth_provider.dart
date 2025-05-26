@@ -1,9 +1,7 @@
 // lib/state_management/auth_provider.dart
-import 'dart:convert'; // base64Encode için
-import 'dart:io'; // File için
+import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/foundation.dart';
-// image_picker UI katmanında kullanılacak, AuthProvider'a direkt import etmeye gerek yok.
-// File objesi UI'dan AuthProvider'a gelecek.
 import 'package:jwt_decode/jwt_decode.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -17,7 +15,7 @@ import '../features/auth/models/signup_response_model.dart';
 import '../features/user_features/account/models/update_user_request_model.dart';
 import '../features/user_features/account/models/update_user_photo_request_model.dart';
 import '../features/user_features/account/models/update_password_request_model.dart';
-import '../core/models/general_api_response_model.dart';
+import '../core/models/general_api_response_model.dart'; // Ensure this is used or remove if not
 
 class AuthProvider with ChangeNotifier {
   final AuthService _authService = AuthService();
@@ -33,7 +31,8 @@ class AuthProvider with ChangeNotifier {
   String? _profilePhotoUrl;
   DateTime? _userCreationDate;
 
-  String? _operationError;
+  String? _operationError; // General error message or first error
+  List<String>? _operationErrorsList; // List of specific errors from API
   bool _isLoading = false;
 
   static const String _spAccessTokenKey = 'accessToken';
@@ -49,23 +48,28 @@ class AuthProvider with ChangeNotifier {
   String? get profilePhotoUrl => _profilePhotoUrl;
   DateTime? get userCreationDate => _userCreationDate;
   String? get operationError => _operationError;
+  List<String>? get operationErrorsList => _operationErrorsList;
   bool get isLoading => _isLoading;
 
   AuthProvider() {
-    // SplashScreen checkAuthStatus'u çağırıyorsa, bu satır gereksizdir.
-    // Eğer SplashScreen'de çağrı yoksa, bu satır aktif olmalıdır.
-    // Varsayılan olarak SplashScreen'in çağırdığını kabul ediyorum.
-    // checkAuthStatus();
+    // checkAuthStatus(); // Typically called from SplashScreen
+  }
+
+  void _clearErrors() {
+    _operationError = null;
+    _operationErrorsList = null;
   }
 
   Future<bool> login(String emailInput, String password) async {
-    _operationError = null;
+    _clearErrors();
     _isLoading = true;
     notifyListeners();
+
     LoginResponseModel loginResponse = await _authService.signInWithEmail(
       emailInput,
       password,
     );
+
     if (loginResponse.isSuccess &&
         loginResponse.data != null &&
         loginResponse.data!.accessToken.isNotEmpty) {
@@ -78,18 +82,21 @@ class AuthProvider with ChangeNotifier {
       );
       if (userInfoSuccess) {
         _isAuthenticated = true;
-        _operationError = null;
       } else {
-        _operationError =
-            _operationError ?? "Kullanıcı detayları alınamadı (login sonrası).";
+        // _fetchAndSetUserInfo already sets _operationError if it fails
         await _clearAuthDataAndPrefs();
         _isAuthenticated = false;
       }
     } else {
-      _operationError =
-          loginResponse.message ??
-          "E-posta veya şifre hatalı/Login API hatası.";
       _isAuthenticated = false;
+      _operationError = loginResponse.message ?? "E-posta veya şifre hatalı.";
+      _operationErrorsList = loginResponse.errors;
+      // If errors list is not empty and general message is generic, use first error as general
+      if ((_operationErrorsList?.isNotEmpty ?? false) &&
+          (_operationError == "E-posta veya şifre hatalı." ||
+              _operationError == loginResponse.message)) {
+        _operationError = _operationErrorsList!.first;
+      }
     }
     _isLoading = false;
     notifyListeners();
@@ -99,7 +106,7 @@ class AuthProvider with ChangeNotifier {
       );
     } else {
       print(
-        'AuthProvider: Login başarısız veya kullanıcı bilgileri alınamadı. Mesaj: $_operationError',
+        'AuthProvider: Login başarısız. Hata: $_operationError, Hatalar: $_operationErrorsList',
       );
     }
     return _isAuthenticated;
@@ -110,6 +117,7 @@ class AuthProvider with ChangeNotifier {
     String? emailIfNull,
     UserInfoData? updatedUserData,
   }) async {
+    _clearErrors(); // Clear previous errors before fetching/setting
     if (updatedUserData != null) {
       _displayName = updatedUserData.displayName ?? _displayName;
       _email = updatedUserData.email ?? _email;
@@ -117,7 +125,6 @@ class AuthProvider with ChangeNotifier {
       _profilePhotoUrl = updatedUserData.photoUrl ?? _profilePhotoUrl;
       _userCreationDate =
           updatedUserData.registrationDateTime ?? _userCreationDate;
-      // userId genellikle token'dan veya ilk yüklemeden gelir, burada değişmemeli.
       notifyListeners();
       print("AuthProvider: Kullanıcı bilgileri lokal olarak güncellendi.");
       return true;
@@ -162,8 +169,13 @@ class AuthProvider with ChangeNotifier {
     } else {
       _operationError =
           userInfoResponse.message ?? "Kullanıcı detayları API\'den alınamadı.";
+      _operationErrorsList = userInfoResponse.errors;
+      if ((_operationErrorsList?.isNotEmpty ?? false) &&
+          _operationError == userInfoResponse.message) {
+        _operationError = _operationErrorsList!.first;
+      }
       print(
-        'AuthProvider (_fetchAndSetUserInfo): Kullanıcı bilgileri API\'den alınamadı. Mesaj: $_operationError',
+        'AuthProvider (_fetchAndSetUserInfo): Kullanıcı bilgileri API\'den alınamadı. Hata: $_operationError, Hatalar: $_operationErrorsList',
       );
       return false;
     }
@@ -171,35 +183,35 @@ class AuthProvider with ChangeNotifier {
 
   Future<void> checkAuthStatus() async {
     print("AuthProvider: checkAuthStatus çağrıldı.");
+    _clearErrors();
     _isLoading = true;
-    notifyListeners();
+    notifyListeners(); // Notify for loading start
+
     final prefs = await SharedPreferences.getInstance();
     final storedAccessToken = prefs.getString(_spAccessTokenKey);
+
     if (storedAccessToken != null && storedAccessToken.isNotEmpty) {
       _accessToken = storedAccessToken;
       _refreshToken = prefs.getString(_spRefreshTokenKey);
       bool success = await _fetchAndSetUserInfo(storedAccessToken);
       if (success) {
         _isAuthenticated = true;
-        _operationError = null;
         print(
           "AuthProvider: Oturum başarıyla yüklendi. Rol: $_userRole, ID: $_userId",
         );
       } else {
-        await _clearAuthDataAndPrefs();
-        _isAuthenticated = false;
-        _operationError =
-            _operationError ?? "Oturum yüklenirken bir sorun oluştu.";
+        // _fetchAndSetUserInfo already sets _operationError/_operationErrorsList
+        await _clearAuthDataAndPrefs(); // This sets _isAuthenticated = false
         print(
           "AuthProvider: Kayıtlı token ile kullanıcı bilgileri alınamadı. Lokal çıkış yapıldı.",
         );
       }
     } else {
-      _logoutInternal(notify: false); // _isAuthenticated = false olur
+      _logoutInternal(notify: false); // Sets _isAuthenticated = false
       print("AuthProvider: Kayıtlı token bulunamadı.");
     }
     _isLoading = false;
-    notifyListeners();
+    notifyListeners(); // Notify for loading end and state changes
   }
 
   Future<void> logout() async {
@@ -209,7 +221,6 @@ class AuthProvider with ChangeNotifier {
         'AuthProvider: Zaten çıkış yapılmış veya token yok. İşlem yapılmayacak.',
       );
       if (_isLoading) {
-        // Eğer bir şekilde true kaldıysa
         _isLoading = false;
         notifyListeners();
       }
@@ -217,14 +228,13 @@ class AuthProvider with ChangeNotifier {
     }
 
     _isLoading = true;
+    _clearErrors(); // Clear errors before logout attempt
     notifyListeners();
 
     String? tokenForSignOutApi = _refreshToken;
-    String? currentAccessTokenForHeader =
-        _accessToken; // SignOut servisi için gerekebilir
+    String? currentAccessTokenForHeader = _accessToken;
 
-    await _clearAuthDataAndPrefs(); // Lokal state ve SP temizlenir, _isAuthenticated false olur
-    _operationError = null; // Önceki hataları temizle
+    await _clearAuthDataAndPrefs(); // Local state and SP cleaned, _isAuthenticated = false
     print('AuthProvider: Lokal veriler ve SharedPreferences temizlendi.');
 
     if (tokenForSignOutApi != null && tokenForSignOutApi.isNotEmpty) {
@@ -238,10 +248,13 @@ class AuthProvider with ChangeNotifier {
           'AuthProvider: Sunucudan başarıyla çıkış yapıldı. Mesaj: ${signOutResponse.message}',
         );
       } else {
+        // Don't set operationError for logout failure typically, as user is already logged out locally.
+        // If you need to show it, uncomment:
+        // _operationError = signOutResponse.message ?? "Sunucudan çıkış yapılamadı.";
+        // _operationErrorsList = signOutResponse.errors;
         print(
-          'AuthProvider UYARI: Sunucudan çıkış yapılamadı. Mesaj: ${signOutResponse.message}',
+          'AuthProvider UYARI: Sunucudan çıkış yapılamadı. Mesaj: ${signOutResponse.message}, Hatalar: ${signOutResponse.errors}',
         );
-        // _operationError = signOutResponse.message ?? "Sunucudan çıkış yapılamadı."; // Kullanıcıya gösterilecekse
       }
     } else {
       print(
@@ -271,7 +284,7 @@ class AuthProvider with ChangeNotifier {
     _email = null;
     _profilePhotoUrl = null;
     _userCreationDate = null;
-    // _operationError = null; // Bu metodu çağıran yerin hata yönetimini bozmama adına burada sıfırlanmayabilir.
+    // _clearErrors(); // Let the calling method manage error display contextually
     if (notify) {
       notifyListeners();
     }
@@ -301,9 +314,10 @@ class AuthProvider with ChangeNotifier {
     required String birthDate,
     required String? gender,
   }) async {
-    _operationError = null;
+    _clearErrors();
     _isLoading = true;
     notifyListeners();
+
     int genderValue;
     switch (gender) {
       case 'Erkek':
@@ -316,20 +330,23 @@ class AuthProvider with ChangeNotifier {
         genderValue = 2;
         break;
     }
+
     String formattedBirthDate;
     try {
       final parts = birthDate.split('/');
-      if (parts.length == 3)
+      if (parts.length == 3) {
         formattedBirthDate =
             "${parts[2]}-${parts[1].padLeft(2, '0')}-${parts[0].padLeft(2, '0')}";
-      else
+      } else {
         throw const FormatException("Geçersiz tarih formatı.");
+      }
     } catch (e) {
       _operationError = "Geçersiz doğum tarihi formatı.";
       _isLoading = false;
       notifyListeners();
       return false;
     }
+
     final requestModel = RegisterRequestModel(
       displayName: displayName,
       email: email,
@@ -338,16 +355,25 @@ class AuthProvider with ChangeNotifier {
       gender: genderValue,
       birthDate: formattedBirthDate,
     );
+
     SignUpResponseModel signUpResponse = await _authService.signUp(
       requestModel,
     );
     _isLoading = false;
-    if (signUpResponse.isSuccess)
-      _operationError = null;
-    else
+
+    if (signUpResponse.isSuccess) {
+      // Success, errors should be clear
+    } else {
       _operationError =
           signUpResponse.message ??
           "Kayıt sırasında bilinmeyen bir hata oluştu.";
+      _operationErrorsList = signUpResponse.errors;
+      // If errors list is not empty and general message is generic, use first error
+      if ((_operationErrorsList?.isNotEmpty ?? false) &&
+          _operationError == signUpResponse.message) {
+        _operationError = _operationErrorsList!.first;
+      }
+    }
     notifyListeners();
     return signUpResponse.isSuccess;
   }
@@ -364,8 +390,9 @@ class AuthProvider with ChangeNotifier {
       return false;
     }
     _isLoading = true;
-    _operationError = null;
+    _clearErrors();
     notifyListeners();
+
     final requestModel = UpdateUserRequestModel(
       displayName: displayName,
       email: email,
@@ -373,21 +400,14 @@ class AuthProvider with ChangeNotifier {
       birthDate: birthDate,
     );
 
-    // UserService.updateUserProfile metodunun UserInfoResponseModel döndüğünü varsayıyoruz.
     final UserInfoResponseModel response = await _userService.updateUserProfile(
       requestModel,
       _accessToken!,
     );
-
     _isLoading = false;
+
     if (response.isSuccess && response.data != null) {
-      // Başarılı güncelleme sonrası AuthProvider'daki state'i güncelle
-      // response.data zaten UserInfoData tipindedir.
-      await _fetchAndSetUserInfo(
-        _accessToken!,
-        updatedUserData: response.data,
-      ); // <<< DÜZELTİLDİ
-      _operationError = null;
+      await _fetchAndSetUserInfo(_accessToken!, updatedUserData: response.data);
       print("AuthProvider: Profil başarıyla güncellendi.");
       notifyListeners();
       return true;
@@ -396,6 +416,11 @@ class AuthProvider with ChangeNotifier {
           response.message ??
           response.errors?.join(", ") ??
           "Profil güncellenirken bir hata oluştu.";
+      _operationErrorsList = response.errors;
+      if ((_operationErrorsList?.isNotEmpty ?? false) &&
+          _operationError == response.message) {
+        _operationError = _operationErrorsList!.first;
+      }
       notifyListeners();
       return false;
     }
@@ -409,47 +434,47 @@ class AuthProvider with ChangeNotifier {
       return false;
     }
     _isLoading = true;
-    _operationError = null;
+    _clearErrors();
     notifyListeners();
+
     try {
       List<int> imageBytes = await imageFile.readAsBytes();
       String base64Image = base64Encode(imageBytes);
-      // API sadece saf base64 bekliyorsa:
       String base64Content = base64Image;
-      // API "data:image/jpeg;base64," gibi bir prefix bekliyorsa:
-      // String extension = imageFile.path.split('.').last.toLowerCase();
-      // String mimeType = (extension == 'jpg' || extension == 'jpeg') ? 'jpeg' : extension;
-      // String base64Content = "data:image/$mimeType;base64,$base64Image";
 
       final requestModel = UpdateUserPhotoRequestModel(
         base64Content: base64Content,
       );
-      final response = await _userService.updateUserPhoto(
-        requestModel,
-        _accessToken!,
-      );
+      final GeneralApiResponseModel response = await _userService
+          .updateUserPhoto(
+            requestModel,
+            _accessToken!,
+          ); // Assuming GeneralApiResponseModel
       _isLoading = false;
+
       if (response.isSuccess) {
-        // Başarılı fotoğraf güncellemesi sonrası güncel kullanıcı bilgilerini çek
-        // (API yeni fotoğraf URL'sini direkt dönmüyorsa)
-        bool userInfoSuccess = await _fetchAndSetUserInfo(_accessToken!);
+        bool userInfoSuccess = await _fetchAndSetUserInfo(
+          _accessToken!,
+        ); // Refetch to get new photo URL
         if (userInfoSuccess) {
           print(
             "AuthProvider: Profil fotoğrafı başarıyla güncellendi ve bilgiler yenilendi.",
           );
-          _operationError = null;
         } else {
-          _operationError =
-              _operationError ??
-              "Fotoğraf güncellendi ancak bilgiler yenilenemedi.";
+          // _fetchAndSetUserInfo sets its own errors
         }
         notifyListeners();
-        return userInfoSuccess; // Veya response.isSuccess dönebilir, API'ye bağlı
+        return userInfoSuccess;
       } else {
         _operationError =
             response.message ??
             response.errors?.join(", ") ??
             "Fotoğraf güncellenirken bir hata oluştu.";
+        _operationErrorsList = response.errors;
+        if ((_operationErrorsList?.isNotEmpty ?? false) &&
+            _operationError == response.message) {
+          _operationError = _operationErrorsList!.first;
+        }
         notifyListeners();
         return false;
       }
@@ -473,40 +498,44 @@ class AuthProvider with ChangeNotifier {
       return false;
     }
     _isLoading = true;
-    _operationError = null;
+    _clearErrors();
     notifyListeners();
+
     final requestModel = UpdatePasswordRequestModel(
       currentPassword: currentPassword,
       newPassword: newPassword,
       newPasswordAgain: newPasswordAgain,
     );
-    final response = await _userService.updateUserPassword(
-      requestModel,
-      _accessToken!,
-    );
+    final GeneralApiResponseModel response = await _userService
+        .updateUserPassword(
+          requestModel,
+          _accessToken!,
+        ); // Assuming GeneralApiResponseModel
     _isLoading = false;
+
     if (response.isSuccess) {
       print("AuthProvider: Şifre başarıyla güncellendi.");
-      _operationError = null;
-      // ÖNEMLİ: Şifre değişikliği sonrası güvenlik için genellikle logout yapılması önerilir.
-      // API yeni token dönmüyorsa ve eski token'lar geçersiz kılındıysa bu zorunludur.
-      // Eğer API yeni bir token seti dönüyorsa, o token'ları burada set edebilirsiniz.
-      // Şimdilik, başarılı işlem sonrası logout yapıyoruz.
-      await logout(); // Kullanıcıyı tekrar login olmaya zorla
-      notifyListeners();
+      await logout(); // Force re-login for security
+      // notifyListeners() is called by logout()
       return true;
     } else {
       _operationError =
           response.message ??
           response.errors?.join(", ") ??
           "Şifre güncellenirken bir hata oluştu.";
+      _operationErrorsList = response.errors;
+      if ((_operationErrorsList?.isNotEmpty ?? false) &&
+          _operationError == response.message) {
+        _operationError = _operationErrorsList!.first;
+      }
       notifyListeners();
       return false;
     }
   }
 
-  void clearOperationError() {
-    _operationError = null;
+  // Renamed from clearOperationError to avoid confusion
+  void clearDisplayedError() {
+    _clearErrors();
     notifyListeners();
   }
 }

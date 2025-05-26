@@ -13,8 +13,10 @@ import 'features/mentor_features/tips_mentor/state_management/tip_provider.dart'
 import 'features/course/state_management/course_provider.dart';
 import 'features/user_features/reading_session/state_management/reading_provider.dart';
 import 'features/user_features/dashboard/state_management/dashboard_provider.dart';
-// YENİ IMPORT (VocabularyProvider)
 import 'features/user_features/vocabulary_practice/state_management/vocabulary_provider.dart'; // Bu yolun doğru olduğundan emin olun
+
+// YENİ IMPORT (ChatProvider)
+import 'state_management/chat_provider.dart'; // ChatProvider için import
 
 class MyHttpOverrides extends HttpOverrides {
   @override
@@ -69,18 +71,20 @@ void main() {
               ),
           update: (context, auth, previous) => DashboardProvider(auth),
         ),
-        // --- YENİ VocabularyProvider EKLEMESİ ---
         ChangeNotifierProxyProvider<AuthProvider, VocabularyProvider>(
           create:
               (context) => VocabularyProvider(
                 Provider.of<AuthProvider>(context, listen: false),
               ),
           update: (context, auth, previousVocabularyProvider) {
-            // AuthProvider değiştiğinde VocabularyProvider'ı yeni auth ile güncelle.
             return VocabularyProvider(auth);
           },
         ),
-        // --- BİTİŞ: VocabularyProvider EKLEMESİ ---
+        // --- YENİ ChatProvider EKLEMESİ ---
+        // ChatProvider AuthProvider'a doğrudan bağımlı olmadığı için
+        // ChangeNotifierProvider olarak eklenir.
+        ChangeNotifierProvider(create: (_) => ChatProvider()),
+        // --- BİTİŞ: ChatProvider EKLEMESİ ---
       ],
       child: const MainApp(),
     ),
@@ -185,7 +189,9 @@ class MainApp extends StatelessWidget {
           style: TextButton.styleFrom(foregroundColor: primaryOrange),
         ),
       ),
-      initialRoute: AppRoutes.splash,
+      initialRoute:
+          AppRoutes
+              .splash, // Eğer splash screen kullanmıyorsanız AppRoutes.login veya uygun bir başlangıç rotası yapın
       onGenerateRoute: RouteGenerator.generateRoute,
     );
   }

@@ -4,7 +4,7 @@ class LoginResponseModel {
   final bool isSuccess;
   final String? message;
   final LoginData? data;
-  final List<String>? errors;
+  final List<String>? errors; // Keep this to store the list of errors
   final int? statusCode;
 
   LoginResponseModel({
@@ -16,30 +16,6 @@ class LoginResponseModel {
   });
 
   factory LoginResponseModel.fromJson(Map<String, dynamic> json) {
-    // API'nizin /Auth/SignInEmail endpoint'inden dönen JSON yapısına göre bu kısım ayarlanmalı.
-    // Başarılı bir yanıtın şöyle olduğunu varsayalım:
-    // {
-    //   "isSuccess": true,
-    //   "message": "Giriş başarılı.",
-    //   "data": {
-    //     "accessToken": "eyJhbGciOiJIUz...",
-    //     "refreshToken": "_R3fr3sH_T0k3n_"
-    //   },
-    //   "errors": null,
-    //   "statusCode": 200
-    // }
-    //
-    // Veya hata yanıtı:
-    // {
-    //   "isSuccess": false,
-    //   "message": "E-posta veya şifre hatalı.",
-    //   "data": null,
-    //   "errors": ["Invalid credentials"],
-    //   "statusCode": 400
-    // }
-
-    // 'data'nın varlığı ve içindeki 'accessToken'ın dolu olması da bir başarı göstergesi olabilir.
-    // Ancak API'niz doğrudan 'isSuccess' alanı dönüyorsa, onu kullanmak daha güvenilir.
     bool success =
         json['isSuccess'] ??
         (json['data'] != null &&
@@ -47,16 +23,38 @@ class LoginResponseModel {
             (json['data']['accessToken'] as String).isNotEmpty &&
             (json['statusCode'] == 200 || json['statusCode'] == null));
 
+    List<String>? errorsList;
+    if (json['errors'] != null) {
+      if (json['errors'] is List) {
+        errorsList = List<String>.from(
+          json['errors'].map((e) => e.toString()),
+        ); // Ensure elements are strings
+      } else if (json['errors'] is Map) {
+        // Handle cases where errors might be a map (e.g., field-specific errors from ASP.NET Identity)
+        errorsList = [];
+        (json['errors'] as Map).forEach((key, value) {
+          if (value is List) {
+            errorsList!.addAll(value.map((e) => e.toString()));
+          } else {
+            errorsList!.add(value.toString());
+          }
+        });
+      } else {
+        errorsList = [
+          json['errors'].toString(),
+        ]; // Fallback if it's a single string
+      }
+    }
+
     return LoginResponseModel(
       isSuccess: success,
       message: json['message'] as String?,
       data: json['data'] != null ? LoginData.fromJson(json['data']) : null,
-      errors: json['errors'] != null ? List<String>.from(json['errors']) : null,
+      errors: errorsList,
       statusCode: json['statusCode'] as int?,
     );
   }
 
-  // Eksik olan failure constructor'ı
   factory LoginResponseModel.failure(
     String message, {
     List<String>? errors,
@@ -74,16 +72,13 @@ class LoginResponseModel {
 
 class LoginData {
   final String accessToken;
-  final String? refreshToken; // refreshToken null olabilir
+  final String? refreshToken;
 
   LoginData({required this.accessToken, this.refreshToken});
 
   factory LoginData.fromJson(Map<String, dynamic> json) {
-    // accessToken'ın null veya boş olmaması önemli
     final String token = json['accessToken'] as String? ?? '';
     if (token.isEmpty) {
-      // Bu durum genellikle bir hatayı işaret eder, loglanabilir.
-      // Ancak LoginResponseModel'in genel isSuccess durumu bunu yönetmeli.
       print(
         "LoginData.fromJson UYARI: 'accessToken' null veya boş geldi. JSON: $json",
       );

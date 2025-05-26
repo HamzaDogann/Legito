@@ -3,8 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/navigation/app_routes.dart';
 import '../../../state_management/auth_provider.dart';
-// Opsiyonel: Tarih formatlama için
-// import 'package:intl/intl.dart';
 
 class RegisterPage extends StatefulWidget {
   const RegisterPage({Key? key}) : super(key: key);
@@ -18,7 +16,7 @@ class _RegisterPageState extends State<RegisterPage> {
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  final _passwordAgainController = TextEditingController(); // Şifre tekrarı
+  final _passwordAgainController = TextEditingController();
   final _birthDateController = TextEditingController();
   String? _selectedGender;
   bool _isAgreementChecked = false;
@@ -38,38 +36,31 @@ class _RegisterPageState extends State<RegisterPage> {
   }
 
   Future<void> _selectBirthDate(BuildContext context) async {
-    FocusScope.of(context).unfocus(); // Klavyeyi kapat
+    FocusScope.of(context).unfocus();
     final DateTime? picked = await showDatePicker(
       context: context,
-      initialDate: DateTime.now().subtract(
-        const Duration(days: 365 * 18),
-      ), // 18 yıl öncesi
+      initialDate: DateTime.now().subtract(const Duration(days: 365 * 18)),
       firstDate: DateTime(1900),
       lastDate: DateTime.now(),
       helpText: 'Doğum Tarihinizi Seçin',
       cancelText: 'İptal',
       confirmText: 'Tamam',
-      locale: const Locale(
-        'tr',
-        'TR',
-      ), // main.dart'ta localizations ayarları yapılmalı
+      locale: const Locale('tr', 'TR'),
     );
     if (picked != null) {
-      // UI'da GG/AA/YYYY formatında gösterelim
       String formattedDate =
           "${picked.day.toString().padLeft(2, '0')}/${picked.month.toString().padLeft(2, '0')}/${picked.year}";
-      setState(() {
-        _birthDateController.text = formattedDate;
-      });
+      setState(() => _birthDateController.text = formattedDate);
     }
   }
 
   Future<void> _submitForm() async {
-    FocusScope.of(context).unfocus(); // Klavyeyi kapat
+    FocusScope.of(context).unfocus();
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    authProvider
+        .clearDisplayedError(); // Clear previous errors before new submission
 
-    if (!(_formKey.currentState?.validate() ?? false)) {
-      return;
-    }
+    if (!(_formKey.currentState?.validate() ?? false)) return;
 
     if (!_isAgreementChecked) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -81,14 +72,12 @@ class _RegisterPageState extends State<RegisterPage> {
       return;
     }
 
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
-
     bool success = await authProvider.register(
       displayName: _nameController.text.trim(),
       email: _emailController.text.trim(),
       password: _passwordController.text,
-      passwordAgain: _passwordAgainController.text, // Şifre tekrarını gönder
-      birthDate: _birthDateController.text, // GG/AA/YYYY formatında
+      passwordAgain: _passwordAgainController.text,
+      birthDate: _birthDateController.text,
       gender: _selectedGender,
     );
 
@@ -107,22 +96,59 @@ class _RegisterPageState extends State<RegisterPage> {
         (route) => false,
       );
     } else {
-      // Hata mesajı AuthProvider'dan operationError ile gelecek.
-      // İsterseniz burada da SnackBar ile gösterebilirsiniz.
-      if (authProvider.operationError != null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(authProvider.operationError!),
-            backgroundColor: Theme.of(context).colorScheme.error,
-          ),
-        );
-      }
+      // Errors are now handled by the Consumer widget below, no need for SnackBar here
+      // if (authProvider.operationError != null || (authProvider.operationErrorsList?.isNotEmpty ?? false)) {
+      //   // Error message will be displayed by the Consumer
+      // }
     }
+  }
+
+  Widget _buildErrorMessages(AuthProvider auth) {
+    if (auth.isLoading)
+      return const SizedBox.shrink(); // Don't show errors while loading
+
+    List<Widget> errorWidgets = [];
+    if (auth.operationErrorsList?.isNotEmpty ?? false) {
+      errorWidgets.addAll(
+        auth.operationErrorsList!.map(
+          (error) => Padding(
+            padding: const EdgeInsets.only(top: 4.0),
+            child: Text(
+              error,
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.error,
+                fontSize: 14,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ),
+      );
+    } else if (auth.operationError != null) {
+      errorWidgets.add(
+        Padding(
+          padding: const EdgeInsets.only(top: 4.0),
+          child: Text(
+            auth.operationError!,
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.error,
+              fontSize: 14,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ),
+      );
+    }
+
+    if (errorWidgets.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16.0, top: 8.0),
+      child: Column(children: errorWidgets),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    // AuthProvider'ı dinleyerek isLoading durumunu alalım
     final authProvider = Provider.of<AuthProvider>(context);
 
     return Scaffold(
@@ -135,7 +161,7 @@ class _RegisterPageState extends State<RegisterPage> {
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Image.asset(
-                  'assets/images/Legito.png', // Bu dosyanın assets klasöründe olduğundan emin olun
+                  'assets/images/Legito.png',
                   width: 160,
                   height: 80,
                   fit: BoxFit.contain,
@@ -145,7 +171,13 @@ class _RegisterPageState extends State<RegisterPage> {
                   'Hesap Oluştur',
                   style: TextStyle(fontSize: 25, fontWeight: FontWeight.w600),
                 ),
-                const SizedBox(height: 32),
+                const SizedBox(height: 24), // Reduced space
+                // Consumer to display API errors
+                Consumer<AuthProvider>(
+                  builder: (context, auth, _) => _buildErrorMessages(auth),
+                ),
+
+                // const SizedBox(height: 8), // Space after errors if any
                 TextFormField(
                   controller: _nameController,
                   decoration: const InputDecoration(
@@ -167,10 +199,8 @@ class _RegisterPageState extends State<RegisterPage> {
                   ),
                   keyboardType: TextInputType.emailAddress,
                   validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
+                    if (value == null || value.trim().isEmpty)
                       return 'E-posta boş olamaz.';
-                    }
-                    // Daha iyi bir email regex'i kullanılabilir.
                     if (!RegExp(
                       r"^[a-zA-Z0-9.a-zA-Z0-9.!#$%&'*+-/=?^_`{|}~]+@[a-zA-Z0-9]+\.[a-zA-Z]+",
                     ).hasMatch(value)) {
@@ -188,23 +218,15 @@ class _RegisterPageState extends State<RegisterPage> {
                     prefixIcon: Icon(Icons.lock_outline),
                   ),
                   validator: (value) {
-                    if (value == null || value.isEmpty) {
+                    if (value == null || value.isEmpty)
                       return 'Şifre boş olamaz.';
-                    }
-                    if (value.length < 6) {
+                    if (value.length < 6)
                       return 'Şifre en az 6 karakter olmalı.';
-                    }
-                    // İsteğe bağlı: API'nizin şifre karmaşıklığı kurallarına göre validator ekleyebilirsiniz.
-                    // Örnek:
-                    // if (!RegExp(r'^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{6,}$').hasMatch(value)) {
-                    //   return 'Şifre en az bir harf ve bir rakam içermelidir.';
-                    // }
                     return null;
                   },
                 ),
                 const SizedBox(height: 16),
                 TextFormField(
-                  // Şifre Tekrarı
                   controller: _passwordAgainController,
                   obscureText: true,
                   decoration: const InputDecoration(
@@ -212,12 +234,10 @@ class _RegisterPageState extends State<RegisterPage> {
                     prefixIcon: Icon(Icons.lock_outline),
                   ),
                   validator: (value) {
-                    if (value == null || value.isEmpty) {
+                    if (value == null || value.isEmpty)
                       return 'Şifre tekrarı boş olamaz.';
-                    }
-                    if (value != _passwordController.text) {
+                    if (value != _passwordController.text)
                       return 'Şifreler eşleşmiyor.';
-                    }
                     return null;
                   },
                 ),
@@ -255,11 +275,7 @@ class _RegisterPageState extends State<RegisterPage> {
                       child: Text('Belirtmek İstemiyorum'),
                     ),
                   ],
-                  onChanged: (value) {
-                    setState(() {
-                      _selectedGender = value;
-                    });
-                  },
+                  onChanged: (value) => setState(() => _selectedGender = value),
                   validator:
                       (value) =>
                           (value == null) ? 'Lütfen cinsiyet seçin.' : null,
@@ -270,11 +286,10 @@ class _RegisterPageState extends State<RegisterPage> {
                   children: [
                     Checkbox(
                       value: _isAgreementChecked,
-                      onChanged: (bool? value) {
-                        setState(() {
-                          _isAgreementChecked = value ?? false;
-                        });
-                      },
+                      onChanged:
+                          (bool? value) => setState(
+                            () => _isAgreementChecked = value ?? false,
+                          ),
                       activeColor: Theme.of(context).colorScheme.primary,
                     ),
                     Expanded(
@@ -335,13 +350,11 @@ class _RegisterPageState extends State<RegisterPage> {
                     onTap:
                         authProvider.isLoading
                             ? null
-                            : () {
-                              Navigator.pushNamedAndRemoveUntil(
-                                context,
-                                AppRoutes.login,
-                                (route) => false,
-                              );
-                            },
+                            : () => Navigator.pushNamedAndRemoveUntil(
+                              context,
+                              AppRoutes.login,
+                              (route) => false,
+                            ),
                     child: Text.rich(
                       TextSpan(
                         text: 'Zaten bir hesabın var mı? ',
