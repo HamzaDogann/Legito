@@ -486,15 +486,88 @@ class _MentorHomePageState extends State<MentorHomePage> {
   }
 
   Widget _buildMentorFloatingActionButton(BuildContext context) {
-    /* ... aynı ... */
     return SizedBox(
       width: 65.0,
       height: 65.0,
       child: FloatingActionButton(
         shape: const CircleBorder(),
         onPressed: () {
-          print('Mentor FAB tıklandı -> Teknik/Ders Yönetimi');
-          Navigator.pushNamed(context, AppRoutes.techniquesLessonMentor);
+          print('Mentor FAB tıklandı -> Modal gösterilecek');
+          showDialog(
+            context: context,
+            builder: (BuildContext dialogContext) {
+              return AlertDialog(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12.0),
+                ),
+                iconPadding: const EdgeInsets.only(top: 20.0),
+                icon: Icon(
+                  Icons.error_outline, // Exclamation mark in a circle
+                  color: Colors.grey.shade500, // Slightly lighter grey for icon
+                  size: 70.0,
+                ),
+                contentPadding: const EdgeInsets.fromLTRB(
+                  24.0,
+                  12.0,
+                  24.0,
+                  0,
+                ), // Reduced top padding for content
+                content: Text(
+                  "Üzgünüz, bu özellik şu an kullanılabilir değil.",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 17,
+                    color:
+                        Theme.of(context).textTheme.bodyLarge?.color ??
+                        Colors.black87,
+                  ),
+                ),
+                actionsPadding:
+                    EdgeInsets.zero, // Remove default padding for actions
+                actionsAlignment: MainAxisAlignment.center,
+                actions: <Widget>[
+                  Container(
+                    width: double.infinity,
+                    margin: const EdgeInsets.only(
+                      top: 20.0,
+                    ), // Space between content and separator line
+                    decoration: BoxDecoration(
+                      border: Border(
+                        top: BorderSide(
+                          color: Colors.grey.shade300,
+                          width: 1.0,
+                        ),
+                      ),
+                    ),
+                    child: TextButton(
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 15.0),
+                        shape: const RoundedRectangleBorder(
+                          // To ensure button part of dialog corners are rounded
+                          borderRadius: BorderRadius.only(
+                            bottomLeft: Radius.circular(12.0),
+                            bottomRight: Radius.circular(12.0),
+                          ),
+                        ),
+                      ),
+                      child: const Text(
+                        "Tamam",
+                        style: TextStyle(
+                          color: pageBodyAccentColor, // Orange color from theme
+                          fontWeight: FontWeight.bold,
+                          fontSize: 17,
+                        ),
+                      ),
+                      onPressed: () {
+                        Navigator.of(dialogContext).pop(); // Close the dialog
+                      },
+                    ),
+                  ),
+                ],
+              );
+            },
+          );
         },
         backgroundColor: fabButtonBackground,
         elevation: 4.0,
