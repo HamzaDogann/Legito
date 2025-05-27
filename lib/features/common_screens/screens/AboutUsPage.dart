@@ -3,8 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 // AuthProvider ve AppRoutes importları gerekebilir (yetkilendirme ve geri butonu için)
-import 'package:provider/provider.dart';
-import '../../../state_management/auth_provider.dart';
 import '../../../core/navigation/app_routes.dart';
 
 class AboutUsPage extends StatelessWidget {

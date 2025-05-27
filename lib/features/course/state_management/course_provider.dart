@@ -58,14 +58,6 @@ class CourseProvider with ChangeNotifier {
 
   CourseProvider(this._authProvider);
 
-  void _clearAllErrors() {
-    _errorIndex = null;
-    _errorDetail = null;
-    _errorMentorCourses = null;
-    _errorSearch = null;
-    _errorSubmit = null;
-  }
-
   void clearSubmitError() {
     _errorSubmit = null;
     notifyListeners();

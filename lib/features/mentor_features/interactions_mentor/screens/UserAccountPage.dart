@@ -1,8 +1,6 @@
-// lib/features/mentor_features/interactions_mentor/screens/UserAccountPage.dart
 import 'package:flutter/material.dart';
 import '../models/user_account_args.dart'; // Args sınıfını import et
 import '../../../../core/navigation/app_routes.dart'; // Geri butonu fallback için
-// user_stats_card_widget.dart dosyasından StatsGrid ve ChartsSection import edilecek
 import '../../../../shared_widgets/user_stats_card_widget.dart';
 
 class UserAccountPage extends StatelessWidget {

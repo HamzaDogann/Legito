@@ -1,12 +1,11 @@
-// lib/features/user_features/library/state_management/library_provider.dart
 import 'package:flutter/material.dart';
-import '../../../../state_management/auth_provider.dart'; // AuthProvider'dan token almak için
+import '../../../../state_management/auth_provider.dart';
 import '../models/resource_enums.dart';
 import '../models/resource_request_model.dart';
-import '../models/resource_response_model.dart'; // API'den gelen model
+import '../models/resource_response_model.dart'; 
 import '../services/resource_service.dart';
 import '../screens/LibraryPage.dart'
-    show LibraryBookItem; // UI modelini kullanmak için
+    show LibraryBookItem;
 
 class LibraryProvider with ChangeNotifier {
   final ResourceService _resourceService = ResourceService();

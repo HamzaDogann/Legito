@@ -1,6 +1,3 @@
-// lib/features/user_features/library/models/resource_request_model.dart
-import 'resource_enums.dart';
-
 class ResourceRequestModel {
   final String name;
   final String? author; // API'niz string? kabul ediyorsa

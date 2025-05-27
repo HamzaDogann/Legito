@@ -14,9 +14,7 @@ import 'features/course/state_management/course_provider.dart';
 import 'features/user_features/reading_session/state_management/reading_provider.dart';
 import 'features/user_features/dashboard/state_management/dashboard_provider.dart';
 import 'features/user_features/vocabulary_practice/state_management/vocabulary_provider.dart'; // Bu yolun doğru olduğundan emin olun
-
-// YENİ IMPORT (ChatProvider)
-import 'state_management/chat_provider.dart'; // ChatProvider için import
+import 'state_management/chat_provider.dart';
 
 class MyHttpOverrides extends HttpOverrides {
   @override
@@ -80,11 +78,7 @@ void main() {
             return VocabularyProvider(auth);
           },
         ),
-        // --- YENİ ChatProvider EKLEMESİ ---
-        // ChatProvider AuthProvider'a doğrudan bağımlı olmadığı için
-        // ChangeNotifierProvider olarak eklenir.
         ChangeNotifierProvider(create: (_) => ChatProvider()),
-        // --- BİTİŞ: ChatProvider EKLEMESİ ---
       ],
       child: const MainApp(),
     ),
@@ -191,7 +185,7 @@ class MainApp extends StatelessWidget {
       ),
       initialRoute:
           AppRoutes
-              .splash, // Eğer splash screen kullanmıyorsanız AppRoutes.login veya uygun bir başlangıç rotası yapın
+              .splash,
       onGenerateRoute: RouteGenerator.generateRoute,
     );
   }
